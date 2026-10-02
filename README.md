@@ -33,6 +33,28 @@ For a physical BLE test:
 6. Confirm the app shows **Accepted by node** and the serial monitor prints
    `SEND_TEXT` with the JSON payload.
 
+### Two-phone ESP32 demonstration
+
+Build one debug artifact and install that same APK on both phones:
+
+```text
+flutter clean
+flutter pub get
+flutter build apk --debug
+adb -s <device-id> uninstall com.example.loraresq
+adb -s <device-id> install --no-streaming build\app\outputs\flutter-apk\app-debug.apk
+```
+
+Use `adb devices` to get each wireless device ID. `--no-streaming` avoids
+stale streamed-install failures such as `INSTALL_PARSE_FAILED_NOT_APK`; verify
+the APK exists and is non-zero before installing. Connect both phones to the
+same advertised ESP32 and wait for both names to appear in **Network** on both
+phones. Send a community message from one phone: it should first show
+**Accepted by node**, then **Broadcasted** with a timestamp, while the other
+phone shows the received message with the same timestamp. Confirmed alerts
+follow the same path and produce an Android notification if notification
+permission is granted. Restart either app and verify its local history remains.
+
 The Serial Monitor logs startup, BLE connect/disconnect events, inbound and
 outbound chunks and frames, rejected or ignored frames, participant identity
 announcements, roster changes, and message payloads. Filter for `[LoRaResQ]`
@@ -40,8 +62,9 @@ when reviewing the trace. This output proves app-to-ESP32 BLE activity only;
 it does not prove LoRa transmission or recipient delivery.
 
 The reference sketch currently proves real BLE discovery, connection,
-chunked-frame transfer, and ESP32 acknowledgement. It does not yet send the
-payload over LoRa; that is the next firmware/radio phase.
+chunked-frame transfer, acknowledgement, and BLE fan-out to subscribed
+clients. It does not yet send the payload over LoRa; that is the next
+firmware/radio phase.
 
 ### Radio forwarding simulator
 
@@ -64,6 +87,11 @@ identities in memory and broadcasts roster updates to connected BLE clients;
 the roster is cleared when the last client disconnects or the ESP32 reboots.
 Connected apps send a five-second identity heartbeat, and the ESP32 expires
 participants after 15 seconds without one.
+
+Participant identity is not based on IMEI or another restricted hardware
+identifier. Android uses its app-scoped `ANDROID_ID`; Windows and web use a
+random installation ID persisted locally. Reinstalling the app or factory
+resetting a device can create a new identity by design.
 
 The app serializes BLE writes, paces frame chunks, and retries transient
 `WRITE_REQUEST_BUSY` responses during connection and messaging.

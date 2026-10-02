@@ -10,6 +10,9 @@ void main() {
       sequence: 7,
       destination: 'community',
       body: 'Meet at the school',
+      senderId: 'device-a',
+      messageId: 'message-a',
+      broadcastedAt: '2026-01-01T00:00:00Z',
     );
 
     final decoded = MeshProtocolCodec.decode(MeshProtocolCodec.encode(frame));
@@ -26,6 +29,9 @@ void main() {
         sequence: 1,
         destination: 'community',
         body: 'A message that needs more than one BLE packet.',
+        senderId: 'device-a',
+        messageId: 'message-a',
+        broadcastedAt: '2026-01-01T00:00:00Z',
       ),
     );
     final reassembler = ProtocolReassembler();

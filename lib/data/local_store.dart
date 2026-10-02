@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/mesh_models.dart';
@@ -85,6 +88,9 @@ class MessageStore {
       alertKind: value['alertKind'] == null
           ? null
           : AlertKind.values.byName(value['alertKind'] as String),
+      broadcastedAt: value['broadcastedAt'] == null
+        ? null
+        : DateTime.tryParse(value['broadcastedAt'] as String),
     );
   }
 
@@ -95,6 +101,7 @@ class MessageStore {
         'state': message.state.name,
         'createdAt': message.createdAt.toIso8601String(),
         'alertKind': message.alertKind?.name,
+        'broadcastedAt': message.broadcastedAt?.toIso8601String(),
       };
 }
 
@@ -143,6 +150,7 @@ class IdentityStore {
   IdentityStore(this._store);
 
   static const _identityKey = 'participant-identity.v1';
+  static const _identityChannel = MethodChannel('loraresq/device_identity');
   final LocalStore _store;
 
   Future<MeshParticipant> readOrCreate() async {
@@ -150,8 +158,26 @@ class IdentityStore {
     if (existing != null && existing.isNotEmpty) {
       return MeshParticipant(id: existing, name: 'This device');
     }
-    final id = 'device-${DateTime.now().microsecondsSinceEpoch}';
+    final platformId = await _readPlatformIdentity();
+    final id = platformId ?? 'device-${DateTime.now().microsecondsSinceEpoch}';
     await _store.write(_identityKey, id);
     return MeshParticipant(id: id, name: 'This device');
+  }
+
+  Future<String?> _readPlatformIdentity() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return null;
+    try {
+      final value = await _identityChannel
+          .invokeMethod<String>('getId')
+          .timeout(const Duration(milliseconds: 10));
+      if (value == null || value.isEmpty) return null;
+      return 'android-$value';
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    } on TimeoutException {
+      return null;
+    }
   }
 }

@@ -5,6 +5,7 @@ enum DeliveryState {
   acceptedByNode,
   queuedForRadio,
   sentToMesh,
+  broadcasted,
   acknowledged,
   expired,
 }
@@ -47,6 +48,7 @@ class MeshMessage {
     required this.state,
     required this.createdAt,
     this.alertKind,
+    this.broadcastedAt,
   });
 
   final String id;
@@ -55,6 +57,7 @@ class MeshMessage {
   final DeliveryState state;
   final DateTime createdAt;
   final AlertKind? alertKind;
+  final DateTime? broadcastedAt;
 
   MeshMessage withState(DeliveryState nextState) => MeshMessage(
         id: id,
@@ -63,6 +66,7 @@ class MeshMessage {
         state: nextState,
         createdAt: createdAt,
         alertKind: alertKind,
+        broadcastedAt: broadcastedAt,
       );
 }
 
@@ -74,6 +78,9 @@ bool canAdvanceDelivery(DeliveryState current, DeliveryState next) {
     (DeliveryState.draft, DeliveryState.acceptedByNode) => true,
     (DeliveryState.acceptedByNode, DeliveryState.queuedForRadio) => true,
     (DeliveryState.queuedForRadio, DeliveryState.sentToMesh) => true,
+    (DeliveryState.acceptedByNode, DeliveryState.broadcasted) => true,
+    (DeliveryState.sentToMesh, DeliveryState.broadcasted) => true,
+    (DeliveryState.broadcasted, DeliveryState.acknowledged) => true,
     (DeliveryState.sentToMesh, DeliveryState.acknowledged) => true,
     (DeliveryState.sentToMesh, DeliveryState.expired) => true,
     _ => false,

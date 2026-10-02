@@ -376,8 +376,12 @@ These interaction rules are mandatory on Android, Windows and web:
   shows **Enable Bluetooth**.
 - Alerts and Messages are unavailable until a personal ESP32 node is connected.
   The disabled state must be visible and must not silently queue a message.
-- Each app has a stable per-install participant ID and display name. After
-  connecting to its ESP32, it announces that identity to the node.
+- Each app has a stable participant ID and display name. Android uses the
+  app-scoped `ANDROID_ID` (never IMEI); Windows and web use a cryptographically
+  random ID persisted in app storage. No platform provides an unchangeable,
+  globally unique hardware ID to web apps, and reinstall/factory reset may
+  legitimately create a new identity. After connecting to its ESP32, the app
+  announces that identity to the node.
 - The Network screen shows the participant roster reported by the ESP32,
   including each participant's display name, stable ID, connection state and
   last-heard time. The app must distinguish an empty/unknown roster from a
@@ -499,6 +503,16 @@ The protocol is identical over BLE and USB, versioned and length-bounded. Use co
 | `PARTICIPANT_HELLO` | Phone → node | Stable app participant ID and display name |
 | `PARTICIPANT_ROSTER` | Node → phone | Connected participant IDs, names, state and last-heard |
 | `PARTICIPANT_ROSTER_REQUEST` | Phone → node | Request a current participant roster after connection |
+| `MESSAGE_BROADCAST` | Node → subscribed phones | Fan out a community or addressed message with message ID and broadcast timestamp |
+| `ALERT_BROADCAST` | Node → subscribed phones | Fan out a confirmed alert and trigger receiver notification |
+
+For the two-phone ESP32 demonstration, each app keeps its own bounded local
+history (maximum 100 records) across restarts; the ESP32 does not persist
+messages. The sender remains `Accepted by node` until the matching
+`MESSAGE_BROADCAST` or `ALERT_BROADCAST` event arrives, then changes to
+`Broadcasted` with the event timestamp. Receivers deduplicate by message ID,
+show the same timestamp, and notify for incoming alerts when notification
+permission is available.
 
 Every frame has a maximum length, protocol version and type. Unknown critical fields or oversized frames are rejected without crashing the node.
 

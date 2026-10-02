@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_controller.dart';
 import '../data/local_store.dart';
+import '../data/notification_service.dart';
 import '../features/alerts/alerts_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/messages/messages_screen.dart';
@@ -60,6 +61,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    NotificationService.instance.initialize();
     widget.controller.restore();
   }
 

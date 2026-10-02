@@ -12,6 +12,8 @@ String deliveryLabel(DeliveryState state) {
       return 'Queued for radio';
     case DeliveryState.sentToMesh:
       return 'Sent to mesh';
+    case DeliveryState.broadcasted:
+      return 'Broadcasted';
     case DeliveryState.acknowledged:
       return 'Acknowledged';
     case DeliveryState.expired:

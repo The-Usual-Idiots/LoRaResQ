@@ -89,7 +89,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
               (message) => Card(
                 child: ListTile(
                   title: Text(message.body),
-                  subtitle: Text('To ${message.destination}'),
+                  subtitle: Text(
+                    'To ${message.destination}'
+                    '${message.broadcastedAt == null ? '' : ' • Broadcasted ${message.broadcastedAt!.toLocal()}'}',
+                  ),
                   trailing: DeliveryBadge(state: message.state),
                 ),
               ),

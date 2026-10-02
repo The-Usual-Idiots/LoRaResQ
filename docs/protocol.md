@@ -39,6 +39,16 @@ Current frame types:
 | 5 | `PARTICIPANT_HELLO` | Phone → node |
 | 6 | `PARTICIPANT_ROSTER` | Node → phone |
 | 7 | `PARTICIPANT_ROSTER_REQUEST` | Phone → node |
+| 8 | `MESSAGE_BROADCAST` | Node → all subscribed phones |
+| 9 | `ALERT_BROADCAST` | Node → all subscribed phones |
+
+`SEND_TEXT` payloads include `messageId`, `senderId`, `destination`, `body`,
+`broadcastedAt`, and optional `alertKind`. The ESP32 first responds with a
+sequence-matched accepted response, then emits a broadcast event. Apps use
+the message ID to change the sender's local record to `Broadcasted` and to
+deduplicate incoming records. The current BLE bridge notifies every connected
+client; each app ignores its own event and ignores direct-message events not
+addressed to its participant ID.
 
 Payload is a bounded JSON object for this bridge slice. The message body is
 limited to 120 characters by the app and must be validated again by firmware.

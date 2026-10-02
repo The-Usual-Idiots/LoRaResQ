@@ -1,5 +1,23 @@
 import '../domain/mesh_models.dart';
 
+class MeshTransportEvent {
+  const MeshTransportEvent({
+    required this.messageId,
+    required this.senderId,
+    required this.destination,
+    required this.body,
+    required this.broadcastedAt,
+    this.alertKind,
+  });
+
+  final String messageId;
+  final String senderId;
+  final String destination;
+  final String body;
+  final DateTime broadcastedAt;
+  final AlertKind? alertKind;
+}
+
 class BluetoothUnavailableException implements Exception {
   const BluetoothUnavailableException(this.message);
 
@@ -11,6 +29,7 @@ class BluetoothUnavailableException implements Exception {
 
 abstract interface class NodeTransport {
   Stream<List<MeshParticipant>> get participantUpdates;
+  Stream<MeshTransportEvent> get events;
   Future<void> ensureReadyForScan();
   Future<List<MeshNode>> scan();
   Future<MeshNode> connect(MeshNode node);
@@ -42,6 +61,8 @@ class DemoNodeTransport implements NodeTransport {
 
   @override
   Stream<List<MeshParticipant>> get participantUpdates => const Stream.empty();
+  @override
+  Stream<MeshTransportEvent> get events => const Stream.empty();
 
   @override
   Future<void> ensureReadyForScan() async {}

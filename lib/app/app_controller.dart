@@ -3,6 +3,7 @@ import 'dart:async';
 
 import '../data/node_transport.dart';
 import '../data/local_store.dart';
+import '../data/notification_service.dart';
 import '../domain/mesh_models.dart';
 
 class AppController extends ChangeNotifier {
@@ -27,13 +28,16 @@ class AppController extends ChangeNotifier {
   String? errorMessage;
   bool bluetoothOff = false;
   final List<MeshMessage> messages = [];
+  final Map<String, MeshTransportEvent> _earlyEvents = {};
   StreamSubscription<List<MeshParticipant>>? _participantSubscription;
+  StreamSubscription<MeshTransportEvent>? _eventSubscription;
 
   Future<void> restore() async {
     _participantSubscription ??= _transport.participantUpdates.listen((value) {
       participants = value;
       notifyListeners();
     });
+    _eventSubscription ??= _transport.events.listen(_handleTransportEvent);
     localParticipant = await _identityStore.readOrCreate();
     messages
       ..clear()
@@ -56,6 +60,7 @@ class AppController extends ChangeNotifier {
   @override
   void dispose() {
     _participantSubscription?.cancel();
+    _eventSubscription?.cancel();
     super.dispose();
   }
 
@@ -126,6 +131,18 @@ class AppController extends ChangeNotifier {
         alertKind: alertKind,
       );
       messages.insert(0, message);
+      final event = _earlyEvents.remove(message.id);
+      if (event != null) {
+        messages[0] = MeshMessage(
+          id: message.id,
+          destination: message.destination,
+          body: message.body,
+          state: DeliveryState.broadcasted,
+          createdAt: message.createdAt,
+          alertKind: message.alertKind,
+          broadcastedAt: event.broadcastedAt,
+        );
+      }
       await _messageStore.writeMessages(messages);
       errorMessage = null;
       notifyListeners();
@@ -135,6 +152,52 @@ class AppController extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+  }
+
+  Future<void> _handleTransportEvent(MeshTransportEvent event) async {
+    if (event.destination != 'community' &&
+        event.destination != localParticipant.id) {
+      return;
+    }
+    final existingIndex =
+        messages.indexWhere((message) => message.id == event.messageId);
+    final timestamp = event.broadcastedAt;
+    if (existingIndex >= 0) {
+      final existing = messages[existingIndex];
+      messages[existingIndex] = MeshMessage(
+          id: existing.id,
+          destination: existing.destination,
+          body: existing.body,
+          state: DeliveryState.broadcasted,
+          createdAt: existing.createdAt,
+          alertKind: existing.alertKind,
+          broadcastedAt: timestamp,
+        );
+    } else if (event.senderId != localParticipant.id) {
+      messages.insert(
+        0,
+        MeshMessage(
+          id: event.messageId,
+          destination: event.destination,
+          body: event.body,
+          state: DeliveryState.broadcasted,
+          createdAt: timestamp,
+          alertKind: event.alertKind,
+          broadcastedAt: timestamp,
+        ),
+      );
+      if (event.alertKind != null) {
+        await NotificationService.instance.showAlert(
+          title: 'Incoming ${event.alertKind!.name} alert',
+          body: event.body,
+        );
+      }
+    } else {
+      _earlyEvents[event.messageId] = event;
+      return;
+    }
+    await _messageStore.writeMessages(messages);
+    notifyListeners();
   }
 
   void clearError() {

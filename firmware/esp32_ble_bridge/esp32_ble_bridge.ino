@@ -118,7 +118,9 @@ void notifyFrame(uint8_t type, uint16_t sequence, const String &json) {
     notifyCharacteristic->setValue((uint8_t *)frame.c_str() + offset, count);
     notifyCharacteristic->notify();
     logEvent("OUT_CHUNK", "offset=" + String(offset) + " bytes=" + String(count));
-    delay(8);
+    // Leave enough time for the controller to deliver each notification on
+    // every subscribed phone before replacing the characteristic value.
+    delay(100);
   }
 }
 
@@ -148,8 +150,27 @@ class WriteCallbacks : public BLECharacteristicCallbacks {
                               " payloadBytes=" + String(payloadLength));
       if (type == 2) {
         logEvent("SEND_TEXT", "seq=" + String(sequence) + " payload=" + payload);
+        const String messageId = jsonField(payload, "messageId");
+        const String senderId = jsonField(payload, "senderId");
+        const String destination = jsonField(payload, "destination");
+        const String body = jsonField(payload, "body");
+        const String alertKind = jsonField(payload, "alertKind");
+        const String broadcastedAt = jsonField(payload, "broadcastedAt");
         notifyFrame(1, sequence,
-                    "{\"id\":\"esp32-accepted\",\"state\":\"acceptedByNode\"}");
+                    "{\"id\":\"" + messageId +
+                        "\",\"state\":\"acceptedByNode\"}");
+        String event = "{\"messageId\":\"" + messageId +
+                       "\",\"senderId\":\"" + senderId +
+                       "\",\"destination\":\"" + destination +
+                       "\",\"body\":\"" + body +
+                       "\",\"broadcastedAt\":\"" + broadcastedAt + "\"";
+        if (alertKind.length() > 0) {
+          event += ",\"alertKind\":\"" + alertKind + "\"";
+        }
+        event += "}";
+        const uint8_t eventType = alertKind.length() > 0 ? 9 : 8;
+        logEvent("FANOUT", "messageId=" + messageId + " targets=all");
+        notifyFrame(eventType, 0, event);
       } else if (type == 5) {
         logEvent("PARTICIPANT_HELLO", "seq=" + String(sequence) +
                                         " payload=" + payload);
@@ -197,7 +218,8 @@ void setup() {
   bleServer->setCallbacks(new ServerCallbacks());
   BLEService *service = bleServer->createService(SERVICE_UUID);
   BLECharacteristic *writeCharacteristic = service->createCharacteristic(
-      WRITE_UUID, BLECharacteristic::PROPERTY_WRITE);
+      WRITE_UUID,
+      BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
   writeCharacteristic->setCallbacks(new WriteCallbacks());
   notifyCharacteristic = service->createCharacteristic(
       NOTIFY_UUID, BLECharacteristic::PROPERTY_NOTIFY);

@@ -16,6 +16,8 @@ enum ProtocolFrameType {
   participantHello,
   participantRoster,
   participantRosterRequest,
+  messageBroadcast,
+  alertBroadcast,
 }
 
 class ProtocolFrame {
@@ -113,6 +115,10 @@ ProtocolFrame sendTextFrame({
   required int sequence,
   required String destination,
   required String body,
+  required String senderId,
+  required String messageId,
+  required String broadcastedAt,
+  AlertKind? alertKind,
 }) {
   if (body.isEmpty || body.length > maxMessageLength) {
     throw ArgumentError('Message must be between 1 and $maxMessageLength characters.');
@@ -121,7 +127,14 @@ ProtocolFrame sendTextFrame({
   return ProtocolFrame(
     type: ProtocolFrameType.sendText,
     sequence: sequence,
-    payload: {'destination': destination, 'body': body},
+    payload: {
+      'destination': destination,
+      'body': body,
+      'senderId': senderId,
+      'messageId': messageId,
+      'broadcastedAt': broadcastedAt,
+      if (alertKind != null) 'alertKind': alertKind.name,
+    },
   );
 }
 
