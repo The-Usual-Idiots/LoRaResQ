@@ -1,8 +1,5 @@
 #include <Arduino.h>
-#include <BLE2902.h>
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
+#include <NimBLEDevice.h>
 
 // LoRaResQ BLE protocol v1:
 // 8-byte header: 0x4c 0x51, version, type, uint16 sequence, uint16 payload length.
@@ -11,14 +8,14 @@ static const char *SERVICE_UUID = "7f6c0001-6b52-4f5d-9a5e-4f6c6f726151";
 static const char *WRITE_UUID = "7f6c0002-6b52-4f5d-9a5e-4f6c6f726151";
 static const char *NOTIFY_UUID = "7f6c0003-6b52-4f5d-9a5e-4f6c6f726151";
 static const uint8_t PROTOCOL_VERSION = 1;
-static BLECharacteristic *notifyCharacteristic;
-static BLEServer *bleServer;
+static NimBLECharacteristic *notifyCharacteristic;
+static NimBLEServer *bleServer;
 static uint16_t connectedClients = 0;
 static const unsigned long PARTICIPANT_PROBE_INTERVAL_MS = 10000;
 static unsigned long lastParticipantProbe = 0;
 static uint16_t participantProbeSequence = 0;
 void notifyFrame(uint8_t type, uint16_t sequence, const String &json,
-                 uint16_t targetConnId = 0xffff);
+                 uint16_t targetConnId = BLE_HS_CONN_HANDLE_NONE);
 
 struct Participant {
   String id;
@@ -39,7 +36,7 @@ struct ClientBuffer {
 static ClientBuffer clientBuffers[8];
 static size_t clientBufferCount = 0;
 
-void logEvent(const char *event, const String &detail = "") {
+void logEvent(const char *event, const String &detail) {
   Serial.print("[LoRaResQ] ");
   Serial.print(event);
   if (detail.length() > 0) {
@@ -59,8 +56,8 @@ String jsonField(const String &json, const char *field) {
   return json.substring(valueStart, valueEnd);
 }
 
-String rosterJson() {
-  String json = "{\"participants\":[";
+String participantsJson() {
+  String json = "[";
   for (size_t index = 0; index < participantCount; index++) {
     if (index > 0) json += ",";
     json += "{\"id\":\"";
@@ -71,14 +68,20 @@ String rosterJson() {
     json += String(participants[index].lastHeard);
     json += "\"}";
   }
-  json += "]}";
+  json += "]";
   return json;
+}
+
+String rosterJson() {
+  return "{\"participants\":" + participantsJson() + "}";
 }
 
 void notifyRoster() {
   const String json = rosterJson();
   logEvent("ROSTER_UPDATED", "participants=" + String(participantCount));
-  notifyFrame(6, 0, json);
+  for (size_t index = 0; index < participantCount; index++) {
+    notifyFrame(6, 0, json, participants[index].connId);
+  }
 }
 
 bool rememberParticipant(const String &id, const String &name, uint16_t connId) {
@@ -128,8 +131,11 @@ void probeParticipants() {
     }
     index++;
   }
-  notifyFrame(10, ++participantProbeSequence,
-              "{\"state\":\"participantPresenceProbe\"}");
+  for (size_t index = 0; index < participantCount; index++) {
+      notifyFrame(10, ++participantProbeSequence,
+                "{\"state\":\"participantPresenceProbe\"}",
+                participants[index].connId);
+  }
   if (changed) notifyRoster();
 }
 
@@ -165,23 +171,22 @@ void notifyFrame(uint8_t type, uint16_t sequence, const String &json,
 
   for (size_t offset = 0; offset < frame.length(); offset += 20) {
     const size_t count = min((size_t)20, frame.length() - offset);
-    notifyCharacteristic->setValue((uint8_t *)frame.c_str() + offset, count);
-    // The Arduino BLE facade only exposes broadcast notify(). Keep the
-    // destination in the broker event; clients discard direct events not
-    // addressed to them. This preserves the protocol while remaining
-    // compatible with the installed ESP32 core.
-    notifyCharacteristic->notify();
+    uint8_t *chunk = (uint8_t *)frame.c_str() + offset;
+    const bool sent = notifyCharacteristic->notify(chunk, count, targetConnId);
+    if (!sent) {
+      logEvent("OUT_CHUNK_ERROR", "target=" + String(targetConnId));
+    }
     logEvent("OUT_CHUNK", "offset=" + String(offset) + " bytes=" + String(count) +
                               " target=" + String(targetConnId));
     delay(40);
   }
 }
 
-class WriteCallbacks : public BLECharacteristicCallbacks {
-  void onWrite(BLECharacteristic *characteristic,
-               esp_ble_gatts_cb_param_t *param) override {
-    const uint16_t connId = param->write.conn_id;
-    String value = characteristic->getValue();
+class WriteCallbacks : public NimBLECharacteristicCallbacks {
+  void onWrite(NimBLECharacteristic *characteristic,
+               NimBLEConnInfo &connInfo) override {
+    const uint16_t connId = connInfo.getConnHandle();
+    String value = String(characteristic->getValue().c_str());
     ClientBuffer *buffer = nullptr;
     for (size_t index = 0; index < clientBufferCount; index++) {
       if (clientBuffers[index].connId == connId) {
@@ -273,7 +278,7 @@ class WriteCallbacks : public BLECharacteristicCallbacks {
         notifyFrame(1, sequence,
                     "{\"state\":\"participantAccepted\",\"stored\":" +
                         String(added ? "true" : "false") +
-                        ",\"participants\":" + rosterJson().substring(16),
+                    ",\"participants\":" + participantsJson(),
                     connId);
         if (added) notifyRoster();
       } else if (type == 7) {
@@ -287,18 +292,31 @@ class WriteCallbacks : public BLECharacteristicCallbacks {
   }
 };
 
-class ServerCallbacks : public BLEServerCallbacks {
-  void onConnect(BLEServer *server) override {
+class NotifyCallbacks : public NimBLECharacteristicCallbacks {
+  void onSubscribe(NimBLECharacteristic *characteristic,
+                   NimBLEConnInfo &connInfo, uint16_t subValue) override {
+    logEvent("NOTIFY_SUBSCRIPTION",
+             "conn=" + String(connInfo.getConnHandle()) +
+                 " value=" + String(subValue));
+  }
+};
+
+class ServerCallbacks : public NimBLEServerCallbacks {
+  void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
     connectedClients++;
-    logEvent("BLE_CONNECTED", "clients=" + String(connectedClients));
-    BLEDevice::startAdvertising();
+    logEvent("BLE_CONNECTED", "clients=" + String(connectedClients) +
+                                  " conn=" + String(connInfo.getConnHandle()));
+    NimBLEDevice::startAdvertising();
   }
 
-  void onDisconnect(BLEServer *server) override {
+  void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo,
+                    int reason) override {
     if (connectedClients > 0) connectedClients--;
-    logEvent("BLE_DISCONNECTED", "clients=" + String(connectedClients));
+    const uint16_t connId = connInfo.getConnHandle();
+    logEvent("BLE_DISCONNECTED", "clients=" + String(connectedClients) +
+                                     " conn=" + String(connId));
     for (size_t index = 0; index < clientBufferCount; index++) {
-      if (clientBuffers[index].connId == server->getConnId()) {
+      if (clientBuffers[index].connId == connId) {
         clientBuffers[index] = clientBuffers[--clientBufferCount];
         break;
       }
@@ -308,7 +326,7 @@ class ServerCallbacks : public BLEServerCallbacks {
       logEvent("ROSTER_CLEARED", "last client disconnected");
       notifyRoster();
     }
-    BLEDevice::startAdvertising();
+    NimBLEDevice::startAdvertising();
   }
 };
 
@@ -316,22 +334,21 @@ void setup() {
   Serial.begin(115200);
   delay(100);
   logEvent("BOOT", "starting BLE bridge");
-  BLEDevice::init("LoRaResQ ESP32");
-  bleServer = BLEDevice::createServer();
+  NimBLEDevice::init("LoRaResQ ESP32");
+  bleServer = NimBLEDevice::createServer();
   bleServer->setCallbacks(new ServerCallbacks());
-  BLEService *service = bleServer->createService(SERVICE_UUID);
-  BLECharacteristic *writeCharacteristic = service->createCharacteristic(
+  NimBLEService *service = bleServer->createService(SERVICE_UUID);
+  NimBLECharacteristic *writeCharacteristic = service->createCharacteristic(
       WRITE_UUID,
-      BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
+      NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
   writeCharacteristic->setCallbacks(new WriteCallbacks());
   notifyCharacteristic = service->createCharacteristic(
-      NOTIFY_UUID, BLECharacteristic::PROPERTY_NOTIFY);
-  notifyCharacteristic->addDescriptor(new BLE2902());
+      NOTIFY_UUID, NIMBLE_PROPERTY::NOTIFY);
+  notifyCharacteristic->setCallbacks(new NotifyCallbacks());
   service->start();
-  BLEAdvertising *advertising = BLEDevice::getAdvertising();
+  NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
   advertising->addServiceUUID(SERVICE_UUID);
-  advertising->setScanResponse(true);
-  BLEDevice::startAdvertising();
+  NimBLEDevice::startAdvertising();
   logEvent("READY", "name=LoRaResQ ESP32 service=" + String(SERVICE_UUID));
 }
 
