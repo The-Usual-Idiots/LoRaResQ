@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 
+import 'app_controller.dart';
+import '../data/local_store.dart';
+import '../features/alerts/alerts_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/messages/messages_screen.dart';
+import '../features/network/network_screen.dart';
 
 class LoraResQApp extends StatelessWidget {
-  const LoraResQApp({super.key});
+  const LoraResQApp({this.controller, this.store, super.key});
+
+  final AppController? controller;
+  final LocalStore? store;
 
   @override
   Widget build(BuildContext context) {
@@ -11,7 +19,9 @@ class LoraResQApp extends StatelessWidget {
       title: 'LoRaResQ',
       theme: _buildTheme(),
       debugShowCheckedModeBanner: false,
-      home: const AppShell(),
+      home: AppShell(
+        controller: controller ?? AppController(store: store),
+      ),
     );
   }
 }
@@ -36,7 +46,9 @@ ThemeData _buildTheme() {
 }
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({required this.controller, super.key});
+
+  final AppController controller;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -44,6 +56,12 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.restore();
+  }
 
   static const _destinations = <NavigationDestination>[
     NavigationDestination(
@@ -75,22 +93,10 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
-      const HomeScreen(),
-      const PlaceholderScreen(
-        title: 'Alerts',
-        message: 'Preset alerts will be available in the next phase.',
-        icon: Icons.warning_amber,
-      ),
-      const PlaceholderScreen(
-        title: 'Messages',
-        message: 'Messages will be available in the next phase.',
-        icon: Icons.chat_bubble_outline,
-      ),
-      const PlaceholderScreen(
-        title: 'Network',
-        message: 'Network health will be available in the next phase.',
-        icon: Icons.hub_outlined,
-      ),
+      HomeScreen(controller: widget.controller),
+      AlertsScreen(controller: widget.controller),
+      MessagesScreen(controller: widget.controller),
+      NetworkScreen(controller: widget.controller),
     ];
 
     return LayoutBuilder(
@@ -137,38 +143,5 @@ class _AppShellState extends State<AppShell> {
 
   void _selectDestination(int index) {
     setState(() => _selectedIndex = index);
-  }
-}
-
-class PlaceholderScreen extends StatelessWidget {
-  const PlaceholderScreen({
-    required this.title,
-    required this.message,
-    required this.icon,
-    super.key,
-  });
-
-  final String title;
-  final String message;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 48, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(height: 16),
-              Text(message, textAlign: TextAlign.center),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
