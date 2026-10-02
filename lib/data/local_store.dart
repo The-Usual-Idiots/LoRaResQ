@@ -165,6 +165,7 @@ class IdentityStore {
   }
 
   Future<String?> _readPlatformIdentity() async {
+    if (_store is MemoryStore) return null;
     if (defaultTargetPlatform != TargetPlatform.android) return null;
     try {
       final value = await _identityChannel
