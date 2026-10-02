@@ -14,7 +14,9 @@ static const uint8_t PROTOCOL_VERSION = 1;
 static BLECharacteristic *notifyCharacteristic;
 static BLEServer *bleServer;
 static uint16_t connectedClients = 0;
-static const unsigned long PARTICIPANT_TIMEOUT_MS = 15000;
+static const unsigned long PARTICIPANT_PROBE_INTERVAL_MS = 10000;
+static unsigned long lastParticipantProbe = 0;
+static uint16_t participantProbeSequence = 0;
 void notifyFrame(uint8_t type, uint16_t sequence, const String &json,
                  uint16_t targetConnId = 0xffff);
 
@@ -23,6 +25,7 @@ struct Participant {
   String name;
   unsigned long lastHeard;
   uint16_t connId;
+  uint8_t missedProbes;
 };
 
 static Participant participants[8];
@@ -85,6 +88,7 @@ bool rememberParticipant(const String &id, const String &name, uint16_t connId) 
       participants[index].name = name;
       participants[index].lastHeard = millis();
       participants[index].connId = connId;
+      participants[index].missedProbes = 0;
       logEvent("PARTICIPANT_REFRESHED", "id=" + id + " name=" + name);
       return false;
     }
@@ -95,27 +99,51 @@ bool rememberParticipant(const String &id, const String &name, uint16_t connId) 
     }
   }
   if (participantCount >= 8) return false;
-  participants[participantCount++] = {id, name, millis(), connId};
+  participants[participantCount++] = {id, name, millis(), connId, 0};
   logEvent("PARTICIPANT_STORED", "id=" + id + " name=" + name);
   return true;
 }
 
-void pruneParticipants() {
-  const unsigned long now = millis();
+void probeParticipants() {
+  if (participantCount == 0 ||
+      millis() - lastParticipantProbe < PARTICIPANT_PROBE_INTERVAL_MS) {
+    return;
+  }
+  lastParticipantProbe = millis();
   bool changed = false;
   for (size_t index = 0; index < participantCount;) {
-    if (now - participants[index].lastHeard <= PARTICIPANT_TIMEOUT_MS) {
-      index++;
+    Participant &participant = participants[index];
+    participant.missedProbes++;
+    logEvent("PARTICIPANT_PROBE", "id=" + participant.id +
+                                      " attempt=" +
+                                      String(participant.missedProbes));
+    if (participant.missedProbes >= 2) {
+      logEvent("PARTICIPANT_REMOVED_NO_RESPONSE", "id=" + participant.id);
+      for (size_t move = index + 1; move < participantCount; move++) {
+        participants[move - 1] = participants[move];
+      }
+      participantCount--;
+      changed = true;
       continue;
     }
-    logEvent("PARTICIPANT_EXPIRED", "id=" + participants[index].id);
-    for (size_t move = index + 1; move < participantCount; move++) {
-      participants[move - 1] = participants[move];
-    }
-    participantCount--;
-    changed = true;
+    index++;
   }
+  notifyFrame(10, ++participantProbeSequence,
+              "{\"state\":\"participantPresenceProbe\"}");
   if (changed) notifyRoster();
+}
+
+void acknowledgeParticipantPresence(uint16_t connId, const String &id) {
+  for (size_t index = 0; index < participantCount; index++) {
+    if (participants[index].connId == connId &&
+        (id.length() == 0 || participants[index].id == id)) {
+      participants[index].lastHeard = millis();
+      participants[index].missedProbes = 0;
+      logEvent("PARTICIPANT_PRESENCE_ACK", "id=" + participants[index].id);
+      return;
+    }
+  }
+  logEvent("PARTICIPANT_PRESENCE_ACK_UNKNOWN", "conn=" + String(connId));
 }
 
 void notifyFrame(uint8_t type, uint16_t sequence, const String &json,
@@ -189,7 +217,10 @@ class WriteCallbacks : public BLECharacteristicCallbacks {
       logEvent("IN_FRAME", "conn=" + String(connId) + " type=" + String(type) +
                               " seq=" + String(sequence) +
                               " payloadBytes=" + String(payloadLength));
-      if (type == 2) {
+      if (type == 1 &&
+          jsonField(payload, "state") == "participantPresenceAck") {
+        acknowledgeParticipantPresence(connId, jsonField(payload, "participantId"));
+      } else if (type == 2) {
         logEvent("SEND_TEXT", "seq=" + String(sequence) + " payload=" + payload);
         const String messageId = jsonField(payload, "messageId");
         const String senderId = jsonField(payload, "senderId");
@@ -305,6 +336,6 @@ void setup() {
 }
 
 void loop() {
-  pruneParticipants();
+  probeParticipants();
   delay(100);
 }

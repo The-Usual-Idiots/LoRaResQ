@@ -41,6 +41,7 @@ Current frame types:
 | 7 | `PARTICIPANT_ROSTER_REQUEST` | Phone → node |
 | 8 | `MESSAGE_BROADCAST` | Node → all subscribed phones |
 | 9 | `ALERT_BROADCAST` | Node → all subscribed phones |
+| 10 | `PARTICIPANT_PRESENCE_PROBE` | Node → subscribed phones |
 
 `SEND_TEXT` payloads include `messageId`, `senderId`, `destination`, `body`,
 `broadcastedAt`, and optional `alertKind`. The ESP32 first responds with a
@@ -109,6 +110,13 @@ from remaining in the roster indefinitely.
 After connecting, each app still explicitly requests a fresh roster as a
 recovery path in addition to announcing its identity. This is not required
 for the normal registration acknowledgement flow.
+
+Every ten seconds, the node probes each participant in its table with a
+`PARTICIPANT_PRESENCE_PROBE`. A connected app answers with a sequence-matched
+`STATUS` payload containing `state: "participantPresenceAck"` and its
+`participantId`. The node clears that participant's missed-probe count when
+the response arrives. A participant that misses two consecutive probes is
+removed, and the changed roster is then broadcast to the remaining phones.
 
 The Flutter transport serializes all writes per BLE connection, waits 25 ms
 between chunks and retries Android `WRITE_REQUEST_BUSY` responses up to three

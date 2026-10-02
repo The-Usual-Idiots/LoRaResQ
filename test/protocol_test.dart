@@ -52,4 +52,18 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('encodes a participant presence acknowledgement', () {
+    final frame = participantPresenceAckFrame(
+      sequence: 12,
+      participantId: 'device-a',
+    );
+
+    final decoded = MeshProtocolCodec.decode(MeshProtocolCodec.encode(frame));
+
+    expect(decoded.type, ProtocolFrameType.status);
+    expect(decoded.sequence, 12);
+    expect(decoded.payload['state'], 'participantPresenceAck');
+    expect(decoded.payload['participantId'], 'device-a');
+  });
 }

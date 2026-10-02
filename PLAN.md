@@ -27,6 +27,9 @@
    connected app.
 4. Reconnecting an existing ID refreshes its connection without creating a
    duplicate row. Each app labels only its own row `This device`.
+5. Every ten seconds the ESP32 probes all stored participants. A participant
+   that does not answer two consecutive probes is removed, and only then is
+   the changed roster broadcast to the remaining participants.
 
 This phase is complete only when both phones show the same two IDs after the
 second registration and the ESP32 serial monitor shows the registration,

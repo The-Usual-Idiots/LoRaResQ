@@ -18,6 +18,7 @@ enum ProtocolFrameType {
   participantRosterRequest,
   messageBroadcast,
   alertBroadcast,
+  participantPresenceProbe,
 }
 
 class ProtocolFrame {
@@ -158,5 +159,19 @@ ProtocolFrame participantRosterRequestFrame({required int sequence}) {
     type: ProtocolFrameType.participantRosterRequest,
     sequence: sequence,
     payload: const {},
+  );
+}
+
+ProtocolFrame participantPresenceAckFrame({
+  required int sequence,
+  required String participantId,
+}) {
+  return ProtocolFrame(
+    type: ProtocolFrameType.status,
+    sequence: sequence,
+    payload: {
+      'state': 'participantPresenceAck',
+      'participantId': participantId,
+    },
   );
 }

@@ -285,6 +285,23 @@ class UniversalBleNodeTransport implements NodeTransport {
         _participantUpdates.add(_participants);
       }
     }
+    if (frame.type == ProtocolFrameType.participantPresenceProbe) {
+      final characteristic = _writeCharacteristic;
+      if (characteristic != null) {
+        unawaited(
+          _writeFrame(
+            MeshProtocolCodec.encode(
+              participantPresenceAckFrame(
+                sequence: frame.sequence,
+                participantId: _participant.id,
+              ),
+            ),
+            characteristic,
+            withResponse: false,
+          ),
+        );
+      }
+    }
     if (frame.type == ProtocolFrameType.participantRoster) {
       _participants = _decodeParticipants(frame.payload);
       _participantUpdates.add(_participants);
