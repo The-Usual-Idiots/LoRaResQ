@@ -44,11 +44,19 @@ Current frame types:
 
 `SEND_TEXT` payloads include `messageId`, `senderId`, `destination`, `body`,
 `broadcastedAt`, and optional `alertKind`. The ESP32 first responds with a
-sequence-matched accepted response, then emits a broadcast event. Apps use
-the message ID to change the sender's local record to `Broadcasted` and to
-deduplicate incoming records. The current BLE bridge notifies every connected
-client; each app ignores its own event and ignores direct-message events not
-addressed to its participant ID.
+sequence-matched accepted response, then emits an event. The ESP32 is a
+long-lived broker: phones keep their BLE connections open, send HELLO and
+heartbeats, and may receive roster or event frames without a preceding
+request.
+
+`destination` is either `community` or a participant ID. Community events are
+intended for every connected phone. The broker selects the destination participant and records it in the event.
+The Arduino BLE facade used by this firmware exposes one shared notification
+characteristic, so packets are fanned out at the BLE layer while the app
+enforces the destination filter and discards direct events addressed to
+another participant. A direct event from the local participant is not added to
+the sender's history. Apps use the message ID to change the sender's local
+community record to `Broadcasted` and to deduplicate incoming records.
 
 Payload is a bounded JSON object for this bridge slice. The message body is
 limited to 120 characters by the app and must be validated again by firmware.

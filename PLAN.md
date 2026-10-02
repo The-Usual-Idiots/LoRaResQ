@@ -506,6 +506,12 @@ The protocol is identical over BLE and USB, versioned and length-bounded. Use co
 | `MESSAGE_BROADCAST` | Node → subscribed phones | Fan out a community or addressed message with message ID and broadcast timestamp |
 | `ALERT_BROADCAST` | Node → subscribed phones | Fan out a confirmed alert and trigger receiver notification |
 
+The BLE connection remains open after the initial HELLO. The ESP32 acts as a
+long-lived event broker: it keeps the roster in RAM, accepts heartbeats and
+requests, and may push roster, message, and alert events without a reconnect.
+Community messages go to every connected app; direct messages are displayed
+only by the addressed recipient; confirmed alerts notify the other apps.
+
 For the two-phone ESP32 demonstration, each app keeps its own bounded local
 history (maximum 100 records) across restarts; the ESP32 does not persist
 messages. The sender remains `Accepted by node` until the matching

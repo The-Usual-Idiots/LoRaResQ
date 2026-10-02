@@ -159,6 +159,13 @@ class AppController extends ChangeNotifier {
         event.destination != localParticipant.id) {
       return;
     }
+    // The firmware's Arduino BLE facade broadcasts notification packets to
+    // subscribed clients. A direct message must still be visible only to its
+    // recipient in the app, not echoed back into the sender's history.
+    if (event.destination != 'community' &&
+        event.senderId == localParticipant.id) {
+      return;
+    }
     final existingIndex =
         messages.indexWhere((message) => message.id == event.messageId);
     final timestamp = event.broadcastedAt;

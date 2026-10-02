@@ -11,21 +11,30 @@ static const char *SERVICE_UUID = "7f6c0001-6b52-4f5d-9a5e-4f6c6f726151";
 static const char *WRITE_UUID = "7f6c0002-6b52-4f5d-9a5e-4f6c6f726151";
 static const char *NOTIFY_UUID = "7f6c0003-6b52-4f5d-9a5e-4f6c6f726151";
 static const uint8_t PROTOCOL_VERSION = 1;
-static String inbound;
 static BLECharacteristic *notifyCharacteristic;
 static BLEServer *bleServer;
 static uint16_t connectedClients = 0;
 static const unsigned long PARTICIPANT_TIMEOUT_MS = 15000;
-void notifyFrame(uint8_t type, uint16_t sequence, const String &json);
+void notifyFrame(uint8_t type, uint16_t sequence, const String &json,
+                 uint16_t targetConnId = 0xffff);
 
 struct Participant {
   String id;
   String name;
   unsigned long lastHeard;
+  uint16_t connId;
 };
 
 static Participant participants[8];
 static size_t participantCount = 0;
+
+struct ClientBuffer {
+  uint16_t connId;
+  String inbound;
+};
+
+static ClientBuffer clientBuffers[8];
+static size_t clientBufferCount = 0;
 
 void logEvent(const char *event, const String &detail = "") {
   Serial.print("[LoRaResQ] ");
@@ -64,18 +73,19 @@ void notifyRoster() {
   notifyFrame(6, 0, json);
 }
 
-void rememberParticipant(const String &id, const String &name) {
+void rememberParticipant(const String &id, const String &name, uint16_t connId) {
   if (id.length() == 0 || name.length() == 0) return;
   for (size_t index = 0; index < participantCount; index++) {
     if (participants[index].id == id) {
       participants[index].name = name;
       participants[index].lastHeard = millis();
+      participants[index].connId = connId;
       notifyRoster();
       return;
     }
   }
   if (participantCount >= 8) return;
-  participants[participantCount++] = {id, name, millis()};
+  participants[participantCount++] = {id, name, millis(), connId};
   notifyRoster();
 }
 
@@ -97,7 +107,8 @@ void pruneParticipants() {
   if (changed) notifyRoster();
 }
 
-void notifyFrame(uint8_t type, uint16_t sequence, const String &json) {
+void notifyFrame(uint8_t type, uint16_t sequence, const String &json,
+                 uint16_t targetConnId) {
   const uint16_t length = json.length();
   String frame;
   frame.reserve(8 + length);
@@ -116,37 +127,56 @@ void notifyFrame(uint8_t type, uint16_t sequence, const String &json) {
   for (size_t offset = 0; offset < frame.length(); offset += 20) {
     const size_t count = min((size_t)20, frame.length() - offset);
     notifyCharacteristic->setValue((uint8_t *)frame.c_str() + offset, count);
+    // The Arduino BLE facade only exposes broadcast notify(). Keep the
+    // destination in the broker event; clients discard direct events not
+    // addressed to them. This preserves the protocol while remaining
+    // compatible with the installed ESP32 core.
     notifyCharacteristic->notify();
-    logEvent("OUT_CHUNK", "offset=" + String(offset) + " bytes=" + String(count));
-    // Leave enough time for the controller to deliver each notification on
-    // every subscribed phone before replacing the characteristic value.
-    delay(100);
+    logEvent("OUT_CHUNK", "offset=" + String(offset) + " bytes=" + String(count) +
+                              " target=" + String(targetConnId));
+    delay(40);
   }
 }
 
 class WriteCallbacks : public BLECharacteristicCallbacks {
-  void onWrite(BLECharacteristic *characteristic) override {
+  void onWrite(BLECharacteristic *characteristic,
+               esp_ble_gatts_cb_param_t *param) override {
+    const uint16_t connId = param->write.conn_id;
     String value = characteristic->getValue();
-    logEvent("IN_CHUNK", "bytes=" + String(value.length()));
-    inbound += value;
-    while (inbound.length() >= 8) {
+    ClientBuffer *buffer = nullptr;
+    for (size_t index = 0; index < clientBufferCount; index++) {
+      if (clientBuffers[index].connId == connId) {
+        buffer = &clientBuffers[index];
+        break;
+      }
+    }
+    if (buffer == nullptr && clientBufferCount < 8) {
+      clientBuffers[clientBufferCount] = {connId, ""};
+      buffer = &clientBuffers[clientBufferCount++];
+    }
+    if (buffer == nullptr) return;
+    logEvent("IN_CHUNK", "conn=" + String(connId) + " bytes=" + String(value.length()));
+    buffer->inbound += value;
+    while (buffer->inbound.length() >= 8) {
       const uint16_t payloadLength =
-          (uint8_t)inbound[6] | ((uint8_t)inbound[7] << 8);
+          (uint8_t)buffer->inbound[6] | ((uint8_t)buffer->inbound[7] << 8);
       const size_t frameLength = 8 + payloadLength;
-      if (inbound.length() < frameLength) return;
-      if ((uint8_t)inbound[0] != 0x4c || (uint8_t)inbound[1] != 0x51 ||
-          (uint8_t)inbound[2] != PROTOCOL_VERSION) {
+      if (buffer->inbound.length() < frameLength) return;
+      if ((uint8_t)buffer->inbound[0] != 0x4c ||
+          (uint8_t)buffer->inbound[1] != 0x51 ||
+          (uint8_t)buffer->inbound[2] != PROTOCOL_VERSION) {
         logEvent("FRAME_REJECTED", "invalid header");
-        inbound = "";
-        notifyFrame(4, 0, "{\"message\":\"Invalid frame\"}");
+        buffer->inbound = "";
+        notifyFrame(4, 0, "{\"message\":\"Invalid frame\"}", connId);
         return;
       }
       const uint16_t sequence =
-          (uint8_t)inbound[4] | ((uint8_t)inbound[5] << 8);
-      const uint8_t type = (uint8_t)inbound[3];
-      String payload = inbound.substring(8, frameLength);
-      inbound.remove(0, frameLength);
-      logEvent("IN_FRAME", "type=" + String(type) + " seq=" + String(sequence) +
+          (uint8_t)buffer->inbound[4] | ((uint8_t)buffer->inbound[5] << 8);
+      const uint8_t type = (uint8_t)buffer->inbound[3];
+      String payload = buffer->inbound.substring(8, frameLength);
+      buffer->inbound.remove(0, frameLength);
+      logEvent("IN_FRAME", "conn=" + String(connId) + " type=" + String(type) +
+                              " seq=" + String(sequence) +
                               " payloadBytes=" + String(payloadLength));
       if (type == 2) {
         logEvent("SEND_TEXT", "seq=" + String(sequence) + " payload=" + payload);
@@ -158,7 +188,7 @@ class WriteCallbacks : public BLECharacteristicCallbacks {
         const String broadcastedAt = jsonField(payload, "broadcastedAt");
         notifyFrame(1, sequence,
                     "{\"id\":\"" + messageId +
-                        "\",\"state\":\"acceptedByNode\"}");
+                        "\",\"state\":\"acceptedByNode\"}", connId);
         String event = "{\"messageId\":\"" + messageId +
                        "\",\"senderId\":\"" + senderId +
                        "\",\"destination\":\"" + destination +
@@ -169,20 +199,37 @@ class WriteCallbacks : public BLECharacteristicCallbacks {
         }
         event += "}";
         const uint8_t eventType = alertKind.length() > 0 ? 9 : 8;
-        logEvent("FANOUT", "messageId=" + messageId + " targets=all");
-        notifyFrame(eventType, 0, event);
+        uint16_t target = 0xffff;
+        if (destination != "community") {
+          target = 0xffff;
+          for (size_t index = 0; index < participantCount; index++) {
+            if (participants[index].id == destination) {
+              target = participants[index].connId;
+              break;
+            }
+          }
+        }
+        logEvent("DELIVER", "messageId=" + messageId +
+                           " destination=" + destination +
+                           " target=" + String(target));
+        if (destination == "community" || target != 0xffff) {
+          notifyFrame(eventType, 0, event, target);
+        } else {
+          notifyFrame(4, sequence, "{\"message\":\"Participant unavailable\"}",
+                      connId);
+        }
       } else if (type == 5) {
         logEvent("PARTICIPANT_HELLO", "seq=" + String(sequence) +
                                         " payload=" + payload);
         rememberParticipant(
             jsonField(payload, "participantId"),
-            jsonField(payload, "displayName"));
+            jsonField(payload, "displayName"), connId);
         notifyFrame(1, sequence,
-                    "{\"state\":\"participantAccepted\"}");
+                    "{\"state\":\"participantAccepted\"}", connId);
       } else if (type == 7) {
         logEvent("PARTICIPANT_ROSTER_REQUEST", "seq=" + String(sequence));
         notifyRoster();
-        notifyFrame(1, sequence, "{\"state\":\"rosterSent\"}");
+        notifyFrame(1, sequence, "{\"state\":\"rosterSent\"}", connId);
       } else {
         logEvent("FRAME_IGNORED", "unsupported type=" + String(type));
       }
@@ -200,6 +247,12 @@ class ServerCallbacks : public BLEServerCallbacks {
   void onDisconnect(BLEServer *server) override {
     if (connectedClients > 0) connectedClients--;
     logEvent("BLE_DISCONNECTED", "clients=" + String(connectedClients));
+    for (size_t index = 0; index < clientBufferCount; index++) {
+      if (clientBuffers[index].connId == server->getConnId()) {
+        clientBuffers[index] = clientBuffers[--clientBufferCount];
+        break;
+      }
+    }
     if (connectedClients == 0) {
       participantCount = 0;
       logEvent("ROSTER_CLEARED", "last client disconnected");

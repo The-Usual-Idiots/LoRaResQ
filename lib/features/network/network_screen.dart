@@ -57,7 +57,11 @@ class NetworkScreen extends StatelessWidget {
                       leading: Icon(
                         participant.connected ? Icons.person : Icons.person_off,
                       ),
-                      title: Text(participant.name),
+                      title: Text(
+                        participant.id == controller.localParticipant.id
+                            ? '${participant.name} (This device)'
+                            : participant.name,
+                      ),
                       subtitle: Text(
                         participant.lastHeard == null
                             ? participant.id

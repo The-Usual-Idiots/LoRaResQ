@@ -156,12 +156,20 @@ class IdentityStore {
   Future<MeshParticipant> readOrCreate() async {
     final existing = await _store.read(_identityKey);
     if (existing != null && existing.isNotEmpty) {
-      return MeshParticipant(id: existing, name: 'This device');
+      return MeshParticipant(id: existing, name: _deviceName(existing));
     }
     final platformId = await _readPlatformIdentity();
     final id = platformId ?? 'device-${DateTime.now().microsecondsSinceEpoch}';
     await _store.write(_identityKey, id);
-    return MeshParticipant(id: id, name: 'This device');
+    return MeshParticipant(id: id, name: _deviceName(id));
+  }
+
+  String _deviceName(String id) {
+    final suffix = id.length > 4 ? id.substring(id.length - 4) : id;
+    if (id.startsWith('android-')) return 'Android phone $suffix';
+    if (id.startsWith('windows-')) return 'Windows device $suffix';
+    if (id.startsWith('web-')) return 'Web device $suffix';
+    return 'LoRaResQ device $suffix';
   }
 
   Future<String?> _readPlatformIdentity() async {
