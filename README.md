@@ -7,12 +7,40 @@ than the apps, carry messages through the mesh.
 The current vertical slice uses a deterministic **Demo Node** so the app can
 be tested before ESP32 firmware and BLE transport are integrated.
 
+The application entry point now uses the real BLE transport. The Demo Node is
+kept only through injected test controllers; a physical run requires the
+reference ESP32 BLE bridge in `firmware/esp32_ble_bridge/`.
+
 ## Run the demo
 
 ```text
 flutter run -d windows
 flutter run -d chrome
 ```
+
+For a physical BLE test:
+
+1. Open `firmware/esp32_ble_bridge/esp32_ble_bridge.ino` in Arduino IDE or
+   PlatformIO.
+2. Install the ESP32 Arduino core and the ESP32 BLE library, select your ESP32
+   board and port, then upload the sketch.
+3. Open the serial monitor at `115200` baud and confirm
+   `LoRaResQ BLE bridge ready`.
+4. On Android, Windows, or a Web Bluetooth-capable Chrome/Edge page, run the
+   app and select **Find node**.
+5. Select **LoRaResQ ESP32**, open **Messages**, enter a short message, and
+   select **Send to mesh**.
+6. Confirm the app shows **Accepted by node** and the serial monitor prints
+   `SEND_TEXT` with the JSON payload.
+
+The reference sketch currently proves real BLE discovery, connection,
+chunked-frame transfer, and ESP32 acknowledgement. It does not yet send the
+payload over LoRa; that is the next firmware/radio phase.
+
+The sketch uses the Arduino-ESP32 BLE API where `BLECharacteristic::getValue()`
+returns an Arduino `String`. If your installed ESP32 library reports a
+`std::string` conversion error at the write callback, make sure the sketch
+contains `String value = characteristic->getValue();`.
 
 On the Home screen:
 
