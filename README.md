@@ -9,7 +9,7 @@ be tested before ESP32 firmware and BLE transport are integrated.
 
 The application entry point now uses the real BLE transport. The Demo Node is
 kept only through injected test controllers; a physical run requires the
-reference ESP32 BLE bridge in `firmware/esp32_ble_bridge/`.
+single ESP32 BLE server in `firmware/esp32_server/`.
 
 ## Run the demo
 
@@ -20,7 +20,7 @@ flutter run -d chrome
 
 For a physical BLE test:
 
-1. Open `firmware/esp32_ble_bridge/esp32_ble_bridge.ino` in Arduino IDE or
+1. Open `firmware/esp32_server/esp32_server.ino` in Arduino IDE or
    PlatformIO.
 2. Install the ESP32 Arduino core and the ESP32 BLE library, select your ESP32
    board and port, then upload the sketch.
@@ -61,7 +61,7 @@ announcements, roster changes, and message payloads. Filter for `[LoRaResQ]`
 when reviewing the trace. This output proves app-to-ESP32 BLE activity only;
 it does not prove LoRa transmission or recipient delivery.
 
-The reference sketch currently proves real BLE discovery, connection,
+The server sketch currently proves real BLE discovery, connection,
 chunked-frame transfer, acknowledgement, and BLE fan-out to subscribed
 clients. It does not yet send the payload over LoRa; that is the next
 firmware/radio phase.
@@ -99,10 +99,8 @@ After connecting, it also requests a fresh participant roster and shows
 transport errors directly on the Messages and Alerts screens instead of
 silently leaving entered text in place.
 
-The sketch uses the Arduino-ESP32 BLE API where `BLECharacteristic::getValue()`
-returns an Arduino `String`. If your installed ESP32 library reports a
-`std::string` conversion error at the write callback, make sure the sketch
-contains `String value = characteristic->getValue();`.
+The sketch uses NimBLE-Arduino. If your installed NimBLE library reports an
+API mismatch, install the NimBLE-Arduino version supported by your ESP32 core.
 
 On the Home screen:
 

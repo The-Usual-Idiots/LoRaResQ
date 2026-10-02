@@ -1,0 +1,6 @@
+# Arduino IDE / arduino-cli generated output
+**/build/
+**/*.bin
+**/*.elf
+**/*.map
+**/*.hex

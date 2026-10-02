@@ -335,7 +335,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
 void setup() {
   Serial.begin(115200);
   delay(100);
-  logEvent("BOOT", "starting BLE bridge");
+  logEvent("BOOT", "starting ESP32 BLE server");
   NimBLEDevice::init("LoRaResQ ESP32");
   bleServer = NimBLEDevice::createServer();
   bleServer->setCallbacks(new ServerCallbacks());

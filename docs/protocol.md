@@ -146,7 +146,7 @@ BLE bridge activity.
 ## Firmware entry point
 
 The Arduino-compatible reference bridge is in
-`firmware/esp32_ble_bridge/esp32_ble_bridge.ino`. It accepts a framed
+`firmware/esp32_server/esp32_server.ino`. It accepts a framed
 `SEND_TEXT`, logs the JSON payload over serial, and returns an acceptance
 notification. LoRa radio forwarding is intentionally the next firmware step.
 
