@@ -1,0 +1,390 @@
+\documentclass[journal]{IEEEtran}
+
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{microtype}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=blue
+}
+
+\title{A Comparison Study of Infrastructure-Independent Communication
+Approaches for Rural Emergency Messaging}
+
+\author{
+\IEEEauthorblockN{Tanishq Mudaliar, Hrshita Balakrishnan, Saivel Konar,
+Selvanavya Thevar}
+\IEEEauthorblockA{\textit{LoRaResQ Project, The Usual Idiots}\\
+Mentor: Dr. Namrata Jiten Patel}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Communication during a flood, fire, medical incident, power outage, or
+cellular-network failure is difficult when users are distributed across rural
+or peri-rural areas. This paper reviews and compares communication approaches
+that may support short emergency messages without assuming continuous Internet
+access. The study contrasts conventional cellular and Internet messaging,
+Wi-Fi/Bluetooth ad-hoc links, LoRaWAN, general-purpose LoRa mesh systems, and
+the proposed LoRaResQ workflow. The comparison uses infrastructure dependence,
+network topology, payload suitability, range and energy characteristics,
+deployment complexity, and operational and security support as evaluation
+criteria.
+The literature indicates that LoRa is attractive for small, delay-tolerant
+messages because of its long range and low power requirements, but also has
+important limitations: low throughput, shared-channel contention, duty-cycle
+constraints, and variable propagation. The requirement for honest delivery
+acknowledgement is a LoRaResQ design principle, not a measured literature
+finding. Existing projects demonstrate the feasibility of low-power LoRa
+communication, but leave a practical gap between a flexible technical mesh
+and a simple, alert-first rural operating workflow. LoRaResQ addresses that
+gap as a proposed, low-cost system that connects a phone to a personal LoRa
+node and allows eligible packets to be relayed by nearby participant nodes.
+The paper does not claim hardware validation; the proposed evaluation plan
+identifies the evidence required before deployment or safety-critical use.
+\end{abstract}
+
+\begin{IEEEkeywords}
+LoRa, LoRaWAN, mesh networking, emergency communication, disaster resilience,
+rural connectivity, off-grid communication.
+\end{IEEEkeywords}
+
+\section{Introduction}
+Mobile phones are powerful emergency tools only when a working device,
+electricity supply, radio link, cellular tower, backhaul, and subscribed
+service are available \cite{threegpp}. Rural roads, farms, forest edges, shelters, and
+disaster-affected localities may not satisfy all of these conditions. A
+communication fallback does not need to carry video or general Internet
+traffic to be useful. It may only need to communicate a bounded message such
+as ``medical help needed'', ``road blocked'', ``I am safe'', or ``assemble at
+the school''.
+
+LoRa is a long-range, low-power physical-layer technology designed for small
+packets. LoRaWAN is a network protocol and system architecture built around
+star-of-stars gateways, while a LoRa mesh uses peer nodes that can forward
+packets. These approaches should not be treated as interchangeable. Adelantado
+et al.\ show that LoRaWAN performance is constrained by capacity, collisions,
+and scalability assumptions \cite{adelantado2017}. Augustin et al.\ similarly
+describe the range, data-rate, and energy trade-offs of LoRa-based networks
+\cite{augustin2016}. These limitations matter more in an emergency because an
+alert should be useful without creating the false impression of guaranteed
+delivery.
+
+This paper presents a focused comparison for the design of LoRaResQ, a
+proposed community-owned emergency messaging mesh. The contribution is not a
+new radio modulation or a claim of superiority over existing platforms.
+Instead, it is a requirements-led comparison and a clearly bounded system
+proposal that can be implemented and tested with a small number of nodes.
+
+\section{Review Method}
+The study searched Google Scholar, publisher pages, arXiv, and official
+standards pages in October 2026 using combinations of ``LoRa'', ``LoRaWAN'',
+``mesh'', ``off-grid'', ``emergency communication'', ``disaster'', ``rural'',
+``scalability'', and ``Meshtastic''. Sources were included when they were
+journal articles, scholarly preprints, or primary technical specifications
+with a clear description of architecture, constraints, or measured results.
+Conference proceedings were excluded because the review requirement called for
+sources with a complete, inspectable discussion and conclusion. Sources were
+also screened for direct relevance to short-message communication rather than
+general high-bandwidth networking. Official technical documentation is used
+only to clarify terminology, regulation, and protocol behaviour; it is not
+treated as independent experimental evidence.
+
+The comparison criteria are:
+\begin{enumerate}
+  \item \textbf{Infrastructure dependence:} whether the system requires a
+  cellular network, Internet, gateway, or cloud service.
+  \item \textbf{Network topology:} direct, star, gateway-based, or multi-hop
+  peer communication.
+  \item \textbf{Payload suitability:} whether the system is appropriate for
+  short text and structured alerts rather than high-bandwidth content.
+  \item \textbf{Range and energy:} reported or expected suitability for
+  battery-powered portable nodes, without assuming a universal range.
+  \item \textbf{Deployment complexity:} hardware, gateway, configuration, and
+  operational requirements.
+  \item \textbf{Operational and security support:} delivery states,
+  prioritisation, expiry, localisation, authentication, and privacy.
+\end{enumerate}
+
+\section{Technologies and Related Systems}
+\subsection{Conventional connected communication}
+Cellular data, SMS, and Internet messaging provide familiar user experiences
+and can support large payloads. Their weakness in this context is dependence on
+external infrastructure. A damaged tower, congested cell, unavailable
+backhaul, depleted battery, or missing coverage can prevent a message from
+being sent. These services should therefore remain the preferred channel when
+available, while an off-grid system should be treated as a fallback rather
+than a replacement for official emergency services. This paper treats
+cellular and Internet messaging as the baseline against which the
+infrastructure dependence of the proposed system is compared; it does not
+claim that the baseline is technically inferior.
+
+\subsection{Wi-Fi and Bluetooth ad-hoc links}
+Wi-Fi and Bluetooth Low Energy are useful for connecting a phone to a nearby
+device or for local peer-to-peer communication. Bluetooth Low Energy is
+specified for low-power short-range links \cite{bluetoothcore}; Wi-Fi provides
+higher throughput than LoRa under the IEEE 802.11 family of local-area
+network standards \cite{ieee802}.
+throughput than LoRa but have shorter practical range and greater sensitivity
+to obstructions and user density. A hybrid architecture can use Bluetooth for
+the phone-to-node link and LoRa for the outdoor node-to-node link. This
+separates the user interface from the low-bandwidth radio network.
+
+\subsection{LoRaWAN}
+LoRaWAN provides a standardised low-power wide-area architecture, normally
+using end devices, gateways, and network/application servers. Its strengths
+include mature device classes, long-range links, and low energy consumption.
+Its architecture is not inherently an infrastructure-free peer mesh: a
+gateway and network service are normally required to carry data to an
+application. Recent survey work on scalable LoRaWAN similarly identifies traffic,
+interference, resource allocation, and topology as important constraints
+\cite{jouhari2023}; the limits identified by Adelantado et al.\ include
+collisions, data-rate trade-offs, and duty-cycle-related constraints
+\cite{adelantado2017}.
+The LoRaWAN specification defines the end-device, gateway, and network-server
+architecture used by this comparison \cite{lorawan2020}.
+
+\subsection{LoRa mesh and disruption-tolerant systems}
+Peer-to-peer LoRa systems remove the requirement for a permanent gateway by
+allowing nodes to relay selected packets. A recent journal review comparing
+open-source and proprietary LoRa mesh technologies identifies energy use,
+latency, throughput, routing, and interoperability as important design
+trade-offs \cite{hammouti2024}. A mesh can extend reach when a direct path is
+blocked, but every relay consumes airtime and energy. Duplicate suppression,
+hop limits, queue policy, packet expiry, and acknowledgement semantics are
+therefore essential.
+
+\subsection{Meshtastic as a practical reference}
+Meshtastic is an important open-source reference for practical off-grid LoRa
+mesh communication. Its official documentation describes a hop-limited
+rebroadcast mesh, regional radio configuration, and encrypted channels
+\cite{meshtasticdocs}. It demonstrates that inexpensive nodes, user devices,
+and mesh forwarding can be combined in a community project. A recent
+Meshtastic-based campus system reports a 2.47 km field link with mean RSSI of
+-110 dBm and mean SNR of +2.75 dB under its stated campus conditions
+\cite{meshtastic2026}. That work is an arXiv preprint about campus telemetry,
+not an emergency-response evaluation; its result must not be presented as a
+LoRaResQ range guarantee.
+LoRaResQ does not claim to replace or outperform Meshtastic. It narrows the
+user experience to a rural emergency workflow: a small set of preset alerts,
+bounded text, explicit status, local-language labels, and a deployment plan
+that can be demonstrated with three interoperable personal nodes.
+
+\section{Comparison}
+Table~\ref{tab:comparison} compares the alternatives against the requirements
+of a local emergency-message fallback. The qualitative entries describe
+architectural fit, not measured performance.
+
+\begin{table*}[t]
+\caption{Qualitative comparison for rural emergency messaging}
+\label{tab:comparison}
+\centering
+\small
+\scriptsize
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X
+>{\raggedright\arraybackslash}X
+>{\raggedright\arraybackslash}X
+>{\raggedright\arraybackslash}X
+>{\raggedright\arraybackslash}X
+>{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Approach} & \textbf{Infrastructure} & \textbf{Topology} &
+\textbf{Payload} & \textbf{Range / energy} & \textbf{Deployment, operations,
+and security} \\
+\midrule
+Cellular / Internet & Required & Provider infrastructure &
+High bandwidth & Phone-dependent & Mature; unavailable during outage \\
+Wi-Fi ad hoc & Not necessarily & Direct / configurable mesh &
+High bandwidth, short range & Moderate & Configuration-heavy; security depends on setup \\
+Bluetooth LE & No Internet required & Direct / local relay &
+Small payloads & Good for short links & Good phone link; not wide-area \\
+LoRaWAN & Gateway and server normally required & Star-of-stars &
+Small, delay-tolerant & Good low-power range & Mature, but gateway and server required \\
+Generic LoRa mesh & No permanent gateway required & Multi-hop peer &
+Small, delay-tolerant & Good, relay-dependent & Routing and security policy required \\
+Meshtastic reference & Configurable; can be off-grid & Multi-hop peer &
+Small text and data & Good, topology-dependent & Mature reference; broad configuration surface \\
+\textbf{LoRaResQ proposal} & \textbf{No permanent gateway for prototype} &
+\textbf{Bounded multi-hop} & \textbf{Alerts and short text} &
+\textbf{Battery-oriented} & \textbf{Alert-first; explicit status and security plan} \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+The comparison produces three design conclusions. First, no approach removes
+the need to state operating conditions: ``sent to the local node'' is not the
+same as ``received by the intended person''. Second, LoRa's advantage is
+appropriate only when the payload is small and delay is acceptable. Third, the
+user workflow is a major part of emergency-system reliability. A system that
+has a radio link but gives ambiguous status, stale alerts, or difficult
+configuration may fail operationally even if its physical layer works.
+
+\section{Proposed LoRaResQ System}
+LoRaResQ is designed as a small, community-owned mesh for hamlets, farms,
+forest-edge routes, shelters, or a contained event. Each participant carries
+a personal node. The phone communicates with its node over Bluetooth LE; the
+node sends a bounded LoRa packet. An eligible new packet may be forwarded by
+another participant's node, subject to a hop limit, duplicate cache, queue
+policy, and packet expiry. The prototype target is three nodes in the path
+\mbox{A $\rightarrow$ B $\rightarrow$ C}, where A and C cannot communicate
+directly.
+
+The application is planned to support:
+\begin{itemize}
+  \item structured alerts such as medical help, fire, flood, road blocked,
+  assemble, and all safe;
+  \item bounded free-text messages;
+  \item states that distinguish queued, accepted by the node, transmitted,
+  relayed, and acknowledged;
+  \item local-language labels and icon-based actions;
+  \item priority and expiry rules to prevent stale or excessive traffic; and
+  \item a deployment record containing region, radio configuration, node
+  identity, and test observations.
+\end{itemize}
+
+The system is deliberately not specified as a guaranteed life-safety service.
+It cannot dispatch an ambulance automatically, guarantee delivery, replace
+112, provide Internet access, or substitute for trained responders. When
+cellular or official emergency communication works, users should use it.
+
+\section{India-Specific Regulatory Context}
+For a rural Indian prototype, the radio configuration must be selected only
+after checking the current Wireless Planning and Coordination (WPC) rules.
+The 2021 exemption rules cover low-power equipment in the 865--868 MHz band
+on a non-interference, non-protection basis \cite{india2021}. A prototype
+must use a compliant regional plan, respect applicable power, bandwidth, and
+duty-cycle limits, and not assume that an EU868 preset is automatically legal
+in India. Equipment Type Approval requirements may also apply before import,
+sale, or deployment. These regulatory checks are part of the deployment
+record, not results claimed by this literature review.
+
+\section{Proposed Evaluation Plan}
+Because the project currently has no hardware, all hardware-related values in
+this paper are requirements or targets rather than results. The planned
+validation should include:
+\begin{enumerate}
+  \item a controlled two-node test with one hundred short messages, selected
+  to provide an initial estimate of delivery proportion rather than a
+  statistically generalisable reliability claim;
+  \item twenty three-node forwarding attempts as a feasibility smoke test,
+  with the direct A-C link unavailable or intentionally attenuated;
+  \item outdoor trials in open and obstructed terrain, recording distance,
+  antenna, spreading-factor settings, packet loss, and acknowledgements;
+  \item battery measurements under a declared workload;
+  \item duplicate and stale-packet tests; and
+  \item a short usability test measuring whether a first-time user can send
+  an alert within thirty seconds without confusing local acceptance with
+  recipient acknowledgement. The thirty-second target is an engineering
+  usability target for the prototype, not a safety standard.
+\end{enumerate}
+
+The results should be reported with the test environment and limitations.
+Vendor range claims should not be presented as project results. No deployment
+should be described as public-safety-ready until radio compliance, electrical
+safety, security, and field reliability have been reviewed.
+
+\section{Limitations of the Study}
+This is a focused design-oriented literature review, not a systematic review
+with a registered search protocol or meta-analysis. Published systems use
+different hardware, frequencies, antennas, firmware, terrain, payload sizes,
+and traffic loads, so their numerical results cannot be transferred directly
+to LoRaResQ. The proposed system has not yet been tested because the team does
+not currently possess the radio hardware. The comparison therefore supports
+the design rationale and test plan; it does not prove range, battery life,
+reliability, or emergency effectiveness.
+
+\section{Conclusion}
+Cellular and Internet services remain the most capable communication options
+when available, but they are not dependable as the only channel in every
+rural or disaster scenario. Wi-Fi and Bluetooth are useful for local links,
+while LoRa provides a promising low-power long-range link for small messages.
+LoRaWAN offers standardisation and mature ecosystem support but normally
+depends on gateway infrastructure. Peer LoRa mesh systems reduce that
+dependency at the cost of airtime, queueing, forwarding, and operational
+complexity.
+
+The literature supports the feasibility of investigating LoRa-based
+off-grid messaging, but it also warns against overclaiming. LoRaResQ's
+distinct contribution is a bounded, alert-first workflow for a small rural
+community, not a new radio technology. Its next credible milestone is a
+measured three-node prototype whose interface, delivery states, relay policy,
+and limitations can be demonstrated transparently.
+
+\begin{thebibliography}{00}
+
+\bibitem{adelantado2017}
+F. Adelantado, X. Vilajosana, P. Tuset-Peiro, B. Martinez, J. Melia-Segui,
+  and T. Watteyne, ``Understanding the limits of LoRaWAN,''
+  \emph{IEEE Communications Magazine}, vol. 55, no. 9, pp. 34--40, 2017.
+  doi: 10.1109/MCOM.2017.1600613.
+
+\bibitem{augustin2016}
+A. Augustin, J. Yi, T. Clausen, and W. M. Townsley, ``A study of LoRa:
+  Long range \& low power networks for the Internet of Things,''
+  \emph{Sensors}, vol. 16, no. 9, Art. no. 1466, 2016.
+  doi: 10.3390/s16091466.
+
+\bibitem{jouhari2023}
+M. Jouhari, N. Saeed, M.-S. Alouini, and E. M. Amhoud, ``A survey on
+  scalable LoRaWAN for massive IoT: Recent advances, potentials, and
+  challenges,'' \emph{IEEE Communications Surveys \& Tutorials}, vol. 25,
+  no. 3, pp. 1841--1876, 2023. doi: 10.1109/COMST.2023.3274934.
+
+\bibitem{hammouti2024}
+M. Hammouti, O. Moussaoui, M. Hassine, and A. Betari, ``Exploring open
+  source and proprietary LoRa mesh technologies,'' \emph{Indonesian
+  Journal of Electrical Engineering and Computer Science}, vol. 34, no. 2,
+  pp. 960--969, 2024. doi: 10.11591/ijeecs.v34.i2.pp960-969.
+
+\bibitem{meshtastic2026}
+R. Garzon Andosilla and J. de Jesus Rugeles Uribe, ``A Meshtastic-based
+  LoRa mesh system for smart campus applications: From solar-powered
+  sensing to containerized data management,'' arXiv preprint
+  arXiv:2605.20379, 2026. [Online]. Available:
+  \url{https://arxiv.org/abs/2605.20379}.
+
+\bibitem{lorawan2020}
+LoRa Alliance, ``LoRaWAN specification,'' technical specification,
+2020. [Online]. Available:
+ \url{https://lora-alliance.org/wp-content/uploads/2020/11/lorawan1.0.3.pdf}.
+
+\bibitem{meshtasticdocs}
+Meshtastic, ``Meshtastic documentation: Mesh broadcast algorithm and
+  configuration,'' online documentation, accessed Oct. 2, 2026. [Online].
+  Available: \url{https://meshtastic.org/docs/technical/mesh-broadcast-algorithm/}.
+
+\bibitem{bluetoothcore}
+Bluetooth SIG, ``Bluetooth Core Specification, Version 5.4,'' technical
+  specification, 2023. [Online]. Available:
+  \url{https://www.bluetooth.com/specifications/specs/core-specification-5-4/}.
+
+\bibitem{ieee802}
+IEEE, ``IEEE Standard for Information Technology--Telecommunications and
+  Information Exchange Between Systems Local and Metropolitan Area Networks--
+  Specific Requirements--Part 11: Wireless LAN Medium Access Control (MAC)
+  and Physical Layer (PHY) Specifications,'' IEEE Std. 802.11-2020, 2020.
+  [Online]. Available: \url{https://standards.ieee.org/standard/802_11-2020.html}.
+
+\bibitem{threegpp}
+3GPP, ``System architecture for the 5G system (5GS),'' 3GPP TS 23.501,
+  technical specification, 2024. [Online]. Available:
+  \url{https://www.3gpp.org/dynareport/23501.htm}.
+
+\bibitem{india2021}
+Government of India, ``Use of Low Power Equipment in the Frequency Band
+  865--868 MHz for Short Range Devices (Exemption from Licence) Rules, 2021,''
+  G.S.R. 853(E), 2021. [Online]. Available:
+  \url{https://thc.nic.in/Central\%20Governmental\%20Rules/use\%20of\%20low\%20power\%20Equipment\%20in\%20the\%20frequency\%20band\%20865\%20to\%20868\%20MHz\%20for\%20Short\%20Range\%20Devices\%20Exemption\%20from\%20Licence\%20Rules,2021.pdf}.
+
+\end{thebibliography}
+
+\end{document}
