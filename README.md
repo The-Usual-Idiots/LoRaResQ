@@ -25,7 +25,7 @@ For a physical BLE test:
 2. Install the ESP32 Arduino core and the ESP32 BLE library, select your ESP32
    board and port, then upload the sketch.
 3. Open the serial monitor at `115200` baud and confirm
-   `LoRaResQ BLE bridge ready`.
+   `[LoRaResQ] READY`.
 4. On Android, Windows, or a Web Bluetooth-capable Chrome/Edge page, run the
    app and select **Find node**.
 5. Select **LoRaResQ ESP32**, open **Messages**, enter a short message, and
@@ -33,9 +33,43 @@ For a physical BLE test:
 6. Confirm the app shows **Accepted by node** and the serial monitor prints
    `SEND_TEXT` with the JSON payload.
 
+The Serial Monitor logs startup, BLE connect/disconnect events, inbound and
+outbound chunks and frames, rejected or ignored frames, participant identity
+announcements, roster changes, and message payloads. Filter for `[LoRaResQ]`
+when reviewing the trace. This output proves app-to-ESP32 BLE activity only;
+it does not prove LoRa transmission or recipient delivery.
+
 The reference sketch currently proves real BLE discovery, connection,
 chunked-frame transfer, and ESP32 acknowledgement. It does not yet send the
 payload over LoRa; that is the next firmware/radio phase.
+
+### Radio forwarding simulator
+
+Before LoRa hardware is selected, the controlled-forwarding rules can be tested
+in memory:
+
+```text
+flutter test test/radio_mesh_test.dart
+```
+
+This verifies bounded packets, A->B->C forwarding, duplicate suppression,
+network/expiry checks and hop limits. It is not a radio-range or hardware
+delivery test. See `docs/radio-mesh-simulator.md`.
+
+When a node is connected, Alerts and Messages are enabled. Messages offer the
+community plus every reported participant except the current app as
+destinations. The Network screen shows the participant roster when the node
+reports one. The reference firmware retains up to eight participant
+identities in memory and broadcasts roster updates to connected BLE clients;
+the roster is cleared when the last client disconnects or the ESP32 reboots.
+Connected apps send a five-second identity heartbeat, and the ESP32 expires
+participants after 15 seconds without one.
+
+The app serializes BLE writes, paces frame chunks, and retries transient
+`WRITE_REQUEST_BUSY` responses during connection and messaging.
+After connecting, it also requests a fresh participant roster and shows
+transport errors directly on the Messages and Alerts screens instead of
+silently leaving entered text in place.
 
 The sketch uses the Arduino-ESP32 BLE API where `BLECharacteristic::getValue()`
 returns an Arduino `String`. If your installed ESP32 library reports a

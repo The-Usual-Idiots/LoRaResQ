@@ -121,6 +121,7 @@ class NodeStore {
     } on TypeError {
       return null;
     }
+
   }
 
   Future<void> writeNode(MeshNode node) async {
@@ -136,4 +137,21 @@ class NodeStore {
   }
 
   Future<void> clear() => _store.remove(_nodeKey);
+}
+
+class IdentityStore {
+  IdentityStore(this._store);
+
+  static const _identityKey = 'participant-identity.v1';
+  final LocalStore _store;
+
+  Future<MeshParticipant> readOrCreate() async {
+    final existing = await _store.read(_identityKey);
+    if (existing != null && existing.isNotEmpty) {
+      return MeshParticipant(id: existing, name: 'This device');
+    }
+    final id = 'device-${DateTime.now().microsecondsSinceEpoch}';
+    await _store.write(_identityKey, id);
+    return MeshParticipant(id: id, name: 'This device');
+  }
 }

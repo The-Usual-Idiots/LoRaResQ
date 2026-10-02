@@ -15,6 +15,11 @@ void main() {
     expect(find.text('Node disconnected'), findsOneWidget);
     expect(find.text('Find node'), findsOneWidget);
     expect(find.text('Local communication'), findsOneWidget);
+
+    await tester.tap(find.text('Messages').first);
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+    expect(find.text('Connect a node to enable messages'), findsOneWidget);
   });
 
   testWidgets('discovers and connects to the demo node', (tester) async {
@@ -29,6 +34,24 @@ void main() {
 
     expect(find.text('Connected to Demo Node'), findsOneWidget);
     expect(find.text('Disconnect'), findsOneWidget);
+  });
+
+  testWidgets('offers community and other participant destinations', (tester) async {
+    final controller = AppController(transport: DemoNodeTransport());
+    await tester.pumpWidget(LoraResQApp(controller: controller));
+
+    await tester.tap(find.text('Find node'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Demo Node'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Messages').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Community'), findsOneWidget);
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    expect(find.text('Demo laptop'), findsOneWidget);
+    expect(find.text('This device'), findsNothing);
   });
 
   testWidgets('sends a message through the connected demo node', (tester) async {

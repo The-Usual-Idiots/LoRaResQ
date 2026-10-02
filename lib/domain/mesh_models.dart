@@ -25,6 +25,20 @@ class MeshNode {
   final int? batteryPercent;
 }
 
+class MeshParticipant {
+  const MeshParticipant({
+    required this.id,
+    required this.name,
+    this.connected = true,
+    this.lastHeard,
+  });
+
+  final String id;
+  final String name;
+  final bool connected;
+  final DateTime? lastHeard;
+}
+
 class MeshMessage {
   const MeshMessage({
     required this.id,

@@ -10,10 +10,13 @@ class BluetoothUnavailableException implements Exception {
 }
 
 abstract interface class NodeTransport {
+  Stream<List<MeshParticipant>> get participantUpdates;
   Future<void> ensureReadyForScan();
   Future<List<MeshNode>> scan();
   Future<MeshNode> connect(MeshNode node);
+  Future<void> setParticipantIdentity(MeshParticipant participant);
   Future<void> disconnect();
+  Future<List<MeshParticipant>> connectedParticipants();
   Future<MeshMessage> send({
     required String destination,
     required String body,
@@ -38,6 +41,9 @@ class DemoNodeTransport implements NodeTransport {
   int _messageNumber = 0;
 
   @override
+  Stream<List<MeshParticipant>> get participantUpdates => const Stream.empty();
+
+  @override
   Future<void> ensureReadyForScan() async {}
 
   @override
@@ -56,6 +62,21 @@ class DemoNodeTransport implements NodeTransport {
   @override
   Future<void> disconnect() async {
     _connectedNode = null;
+  }
+
+  @override
+  Future<void> setParticipantIdentity(MeshParticipant participant) async {}
+
+  @override
+  Future<List<MeshParticipant>> connectedParticipants() async {
+    if (_connectedNode == null) return const [];
+    return [
+      MeshParticipant(
+        id: 'demo-laptop',
+        name: 'Demo laptop',
+        lastHeard: DateTime.now(),
+      ),
+    ];
   }
 
   @override

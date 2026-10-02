@@ -39,6 +39,23 @@ class _AlertsScreenState extends State<AlertsScreen> {
               const Text(
                 'Choose a clear local action. Hold confirmation is required before sending.',
               ),
+              if (!widget.controller.communicationEnabled)
+                const Card(
+                  child: ListTile(
+                    leading: Icon(Icons.link_off),
+                    title: Text('Connect a node to enable alerts'),
+                    subtitle: Text('Alerts cannot be sent while disconnected.'),
+                  ),
+                ),
+            if (widget.controller.errorMessage != null)
+                Card(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  child: ListTile(
+                    leading: const Icon(Icons.error_outline),
+                    title: const Text('Alert could not be sent'),
+                    subtitle: Text(widget.controller.errorMessage!),
+                  ),
+                ),
               const SizedBox(height: 16),
               Wrap(
                 spacing: 12,

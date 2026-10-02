@@ -365,6 +365,30 @@ flowchart TD
 
 The app must never skip to a later state without evidence.
 
+## 6.6 Connection-gated communication and participant discovery
+
+These interaction rules are mandatory on Android, Windows and web:
+
+- Selecting **Scan for nodes** first checks Bluetooth availability. If Bluetooth
+  is off, the app requests that it be enabled where the platform allows it and
+  explains how to enable it otherwise. If the user declines or Bluetooth
+  remains unavailable, node connection actions stay disabled and the screen
+  shows **Enable Bluetooth**.
+- Alerts and Messages are unavailable until a personal ESP32 node is connected.
+  The disabled state must be visible and must not silently queue a message.
+- Each app has a stable per-install participant ID and display name. After
+  connecting to its ESP32, it announces that identity to the node.
+- The Network screen shows the participant roster reported by the ESP32,
+  including each participant's display name, stable ID, connection state and
+  last-heard time. The app must distinguish an empty/unknown roster from a
+  confirmed empty network.
+- Messages support both community broadcasts and direct messages. A direct
+  message destination list contains every reported participant except this
+  app. The UI must not offer the local participant as a destination.
+- The current single-ESP32 BLE bridge can demonstrate the UI and identity
+  handshake, but a true multi-app roster requires firmware support for multiple
+  BLE clients and node-side participant announcements.
+
 ## 6.5 Failure wording
 
 | Condition | User-facing text |
@@ -393,6 +417,10 @@ The app must never skip to a later state without evidence.
 | FR-08 | Provide battery and basic node status. | Should | Visible on Home / Network screens. |
 | FR-09 | Keep history locally without internet. | Should | Airplane-mode persistence test. |
 | FR-10 | Let authorised coordinator clear expired broadcast warning. | Should | Authenticated clear shown in history. |
+| FR-11 | Gate node connection on Bluetooth readiness. | Must | Bluetooth-off prompt and disabled connection state are visible. |
+| FR-12 | Disable alerts and messages while disconnected. | Must | Controls cannot be activated before node connection. |
+| FR-13 | Show connected app participants. | Must | Network roster displays reported participant identities. |
+| FR-14 | Send direct messages to another participant. | Must | Destination picker excludes the sending app. |
 
 ## 7.2 Non-functional requirements
 
@@ -468,6 +496,9 @@ The protocol is identical over BLE and USB, versioned and length-bounded. Use co
 | `NODE_STATUS` | Node → phone | Battery, radio state, queue depth and last activity |
 | `CONFIG_READ` | Phone → node | Requested safe configuration fields |
 | `CONFIG_WRITE` | Phone → node | Authorised changes only |
+| `PARTICIPANT_HELLO` | Phone → node | Stable app participant ID and display name |
+| `PARTICIPANT_ROSTER` | Node → phone | Connected participant IDs, names, state and last-heard |
+| `PARTICIPANT_ROSTER_REQUEST` | Phone → node | Request a current participant roster after connection |
 
 Every frame has a maximum length, protocol version and type. Unknown critical fields or oversized frames are rejected without crashing the node.
 

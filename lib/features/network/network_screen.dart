@@ -31,6 +31,44 @@ class NetworkScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              Text('Connected apps', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              if (node == null)
+                const Card(
+                  child: ListTile(
+                    leading: Icon(Icons.people_outline),
+                    title: Text('Connect a node to see participants'),
+                  ),
+                )
+              else if (controller.participants.isEmpty)
+                const Card(
+                  child: ListTile(
+                    leading: Icon(Icons.sync),
+                    title: Text('Participant roster unavailable'),
+                    subtitle: Text(
+                      'This node has not reported other connected apps yet.',
+                    ),
+                  ),
+                )
+              else
+                ...controller.participants.map(
+                  (participant) => Card(
+                    child: ListTile(
+                      leading: Icon(
+                        participant.connected ? Icons.person : Icons.person_off,
+                      ),
+                      title: Text(participant.name),
+                      subtitle: Text(
+                        participant.lastHeard == null
+                            ? participant.id
+                            : '${participant.id} • last heard '
+                                '${participant.lastHeard}',
+                      ),
+                      trailing: Text(participant.connected ? 'Connected' : 'Offline'),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 16),
               const Card(
                 child: ListTile(
                   leading: Icon(Icons.info_outline),

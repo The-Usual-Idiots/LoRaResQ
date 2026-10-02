@@ -7,7 +7,16 @@ const protocolServiceUuid = '7f6c0001-6b52-4f5d-9a5e-4f6c6f726151';
 const protocolWriteUuid = '7f6c0002-6b52-4f5d-9a5e-4f6c6f726151';
 const protocolNotifyUuid = '7f6c0003-6b52-4f5d-9a5e-4f6c6f726151';
 
-enum ProtocolFrameType { hello, status, sendText, messageReceived, error }
+enum ProtocolFrameType {
+  hello,
+  status,
+  sendText,
+  messageReceived,
+  error,
+  participantHello,
+  participantRoster,
+  participantRosterRequest,
+}
 
 class ProtocolFrame {
   const ProtocolFrame({
@@ -108,9 +117,33 @@ ProtocolFrame sendTextFrame({
   if (body.isEmpty || body.length > maxMessageLength) {
     throw ArgumentError('Message must be between 1 and $maxMessageLength characters.');
   }
+
   return ProtocolFrame(
     type: ProtocolFrameType.sendText,
     sequence: sequence,
     payload: {'destination': destination, 'body': body},
+  );
+}
+
+ProtocolFrame participantHelloFrame({
+  required int sequence,
+  required String participantId,
+  required String displayName,
+}) {
+  return ProtocolFrame(
+    type: ProtocolFrameType.participantHello,
+    sequence: sequence,
+    payload: {
+      'participantId': participantId,
+      'displayName': displayName,
+    },
+  );
+}
+
+ProtocolFrame participantRosterRequestFrame({required int sequence}) {
+  return ProtocolFrame(
+    type: ProtocolFrameType.participantRosterRequest,
+    sequence: sequence,
+    payload: const {},
   );
 }

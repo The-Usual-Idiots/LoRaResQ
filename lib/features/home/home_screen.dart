@@ -112,6 +112,11 @@ class _ConnectionCard extends StatelessWidget {
                   icon: Icon(connected ? Icons.link_off : Icons.bluetooth_searching),
                   label: Text(connected ? 'Disconnect' : 'Find node'),
                 ),
+                if (controller.bluetoothOff)
+                  const Text(
+                    'Enable Bluetooth to connect to a node.',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 if (controller.discoveredNodes.isNotEmpty && !connected)
                   Text('${controller.discoveredNodes.length} node found'),
               ],

@@ -36,6 +36,9 @@ Current frame types:
 | 2 | `SEND_TEXT` | Phone → node |
 | 3 | `MESSAGE_RECEIVED` | Node → phone |
 | 4 | `ERROR` | Node → phone |
+| 5 | `PARTICIPANT_HELLO` | Phone → node |
+| 6 | `PARTICIPANT_ROSTER` | Node → phone |
+| 7 | `PARTICIPANT_ROSTER_REQUEST` | Phone → node |
 
 Payload is a bounded JSON object for this bridge slice. The message body is
 limited to 120 characters by the app and must be validated again by firmware.
@@ -65,9 +68,53 @@ The current bridge responds with a `STATUS` frame carrying the sequence and:
 This response confirms BLE acceptance by the ESP32 only. It is not proof of
 LoRa transmission, mesh forwarding, recipient receipt or emergency response.
 
+`PARTICIPANT_HELLO` carries the app's stable participant ID and display name
+after BLE connection. The reference firmware retains up to eight participant
+identities and broadcasts them in `PARTICIPANT_ROSTER` notifications to all
+subscribed BLE clients. The current bridge uses a simple in-memory roster; it
+is cleared when the last BLE client disconnects and is not yet persisted across
+ESP32 reboot.
+Clients refresh their participant hello every five seconds. The bridge expires
+participants after 15 seconds without a hello, preventing disconnected apps
+from remaining in the roster indefinitely.
+After connecting, each app explicitly requests a fresh roster in addition to
+announcing its identity. This avoids relying on notification timing from the
+other client's hello.
+
+The Flutter transport serializes all writes per BLE connection, waits 25 ms
+between chunks and retries Android `WRITE_REQUEST_BUSY` responses up to three
+times. This is required because ATT write requests must not overlap.
+
+## Serial trace
+
+The reference firmware logs the complete BLE bridge lifecycle at 115200 baud.
+Each line begins with `[LoRaResQ]` and an event name:
+
+| Event | Meaning |
+|---|---|
+| `BOOT` / `READY` | Firmware startup and advertising is ready |
+| `BLE_CONNECTED` / `BLE_DISCONNECTED` | BLE client count changed |
+| `IN_CHUNK` / `OUT_CHUNK` | BLE bytes received or notified |
+| `IN_FRAME` / `OUT_FRAME` | Complete protocol frame received or sent |
+| `FRAME_REJECTED` / `FRAME_IGNORED` | Invalid or unsupported input |
+| `SEND_TEXT` | Text command payload received |
+| `PARTICIPANT_HELLO` | App identity announcement received |
+| `ROSTER_UPDATED` / `ROSTER_CLEARED` | Participant roster changed |
+
+Do not treat serial output as proof of LoRa delivery; it proves only the local
+BLE bridge activity.
+
 ## Firmware entry point
 
 The Arduino-compatible reference bridge is in
 `firmware/esp32_ble_bridge/esp32_ble_bridge.ino`. It accepts a framed
 `SEND_TEXT`, logs the JSON payload over serial, and returns an acceptance
 notification. LoRa radio forwarding is intentionally the next firmware step.
+
+## Radio packet simulator slice
+
+The in-memory radio forwarding rules are implemented in
+`lib/data/radio_mesh.dart` and cover network isolation, expiry, duplicate
+suppression and bounded hop forwarding. They are documented and tested in
+`docs/radio-mesh-simulator.md`. This is a software-only acceptance slice; it
+does not validate a LoRa module, antenna, frequency profile or range.

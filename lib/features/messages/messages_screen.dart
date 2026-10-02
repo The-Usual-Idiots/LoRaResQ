@@ -15,6 +15,7 @@ class MessagesScreen extends StatefulWidget {
 
 class _MessagesScreenState extends State<MessagesScreen> {
   final _messageController = TextEditingController();
+  String _destination = 'community';
 
   @override
   void dispose() {
@@ -31,12 +32,45 @@ class _MessagesScreenState extends State<MessagesScreen> {
         body: ListView(
           padding: const EdgeInsets.all(24),
           children: [
+            if (!widget.controller.communicationEnabled)
+              const Card(
+                child: ListTile(
+                  leading: Icon(Icons.link_off),
+                  title: Text('Connect a node to enable messages'),
+                  subtitle: Text('Messages cannot be sent while disconnected.'),
+                ),
+              ),
+            if (widget.controller.errorMessage != null)
+              Card(
+                color: Theme.of(context).colorScheme.errorContainer,
+                child: ListTile(
+                  leading: const Icon(Icons.error_outline),
+                  title: const Text('Message could not be sent'),
+                  subtitle: Text(widget.controller.errorMessage!),
+                ),
+              ),
+            DropdownButtonFormField<String>(
+              initialValue: _destination,
+              decoration: const InputDecoration(labelText: 'Send to'),
+              items: widget.controller.messageDestinations
+                  .map(
+                    (participant) => DropdownMenuItem(
+                      value: participant.id,
+                      child: Text(participant.name),
+                    ),
+                  )
+                  .toList(),
+              onChanged: widget.controller.communicationEnabled
+                  ? (value) => setState(() => _destination = value ?? 'community')
+                  : null,
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _messageController,
               maxLength: maxMessageLength,
               enabled: widget.controller.connectedNode != null,
               decoration: const InputDecoration(
-                labelText: 'Message to community',
+                labelText: 'Message',
                 hintText: 'Keep the message under 120 characters',
               ),
             ),
@@ -69,7 +103,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Future<void> _sendMessage(BuildContext context) async {
     final body = _messageController.text.trim();
     if (body.isEmpty || body.length > maxMessageLength) return;
-    await widget.controller.send(destination: 'community', body: body);
-    if (context.mounted) _messageController.clear();
+    final message = await widget.controller.send(
+      destination: _destination,
+      body: body,
+    );
+    if (message != null && context.mounted) _messageController.clear();
   }
 }
