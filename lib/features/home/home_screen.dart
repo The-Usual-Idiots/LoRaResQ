@@ -27,6 +27,7 @@ class HomeScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       _ErrorBanner(
                         message: controller.errorMessage!,
+                        bluetoothOff: controller.bluetoothOff,
                         onDismiss: controller.clearError,
                       ),
                     ],
@@ -124,6 +125,25 @@ class _ConnectionCard extends StatelessWidget {
   Future<void> _showNodePicker(BuildContext context) async {
     await controller.scan();
     if (!context.mounted) return;
+    if (controller.bluetoothOff) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Bluetooth is off'),
+          content: Text(
+            '${controller.errorMessage ?? 'Bluetooth is unavailable.'}\n\n'
+            'Start Bluetooth in your device settings, then tap Find node again.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       builder: (context) => SafeArea(
@@ -157,9 +177,14 @@ class _ConnectionCard extends StatelessWidget {
 }
 
 class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.message, required this.onDismiss});
+  const _ErrorBanner({
+    required this.message,
+    required this.bluetoothOff,
+    required this.onDismiss,
+  });
 
   final String message;
+  final bool bluetoothOff;
   final VoidCallback onDismiss;
 
   @override
@@ -168,7 +193,7 @@ class _ErrorBanner extends StatelessWidget {
       color: Theme.of(context).colorScheme.errorContainer,
       child: ListTile(
         leading: const Icon(Icons.error_outline),
-        title: const Text('Action could not be completed'),
+        title: Text(bluetoothOff ? 'Bluetooth is off' : 'Action could not be completed'),
         subtitle: Text(message),
         trailing: IconButton(
           onPressed: onDismiss,

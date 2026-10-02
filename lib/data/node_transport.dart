@@ -1,6 +1,16 @@
 import '../domain/mesh_models.dart';
 
+class BluetoothUnavailableException implements Exception {
+  const BluetoothUnavailableException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 abstract interface class NodeTransport {
+  Future<void> ensureReadyForScan();
   Future<List<MeshNode>> scan();
   Future<MeshNode> connect(MeshNode node);
   Future<void> disconnect();
@@ -26,6 +36,9 @@ class DemoNodeTransport implements NodeTransport {
   final List<MeshNode> availableNodes;
   MeshNode? _connectedNode;
   int _messageNumber = 0;
+
+  @override
+  Future<void> ensureReadyForScan() async {}
 
   @override
   Future<List<MeshNode>> scan() async => availableNodes;

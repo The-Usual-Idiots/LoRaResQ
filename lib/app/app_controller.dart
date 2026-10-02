@@ -17,6 +17,7 @@ class AppController extends ChangeNotifier {
   List<MeshNode> discoveredNodes = const [];
   MeshNode? connectedNode;
   String? errorMessage;
+  bool bluetoothOff = false;
   final List<MeshMessage> messages = [];
 
   Future<void> restore() async {
@@ -39,10 +40,15 @@ class AppController extends ChangeNotifier {
   Future<void> scan() async {
     connectionState = NodeConnectionState.scanning;
     errorMessage = null;
+    bluetoothOff = false;
     notifyListeners();
     try {
       discoveredNodes = await _transport.scan();
       connectionState = NodeConnectionState.disconnected;
+    } on BluetoothUnavailableException catch (error) {
+      connectionState = NodeConnectionState.error;
+      bluetoothOff = true;
+      errorMessage = error.message;
     } catch (error) {
       connectionState = NodeConnectionState.error;
       errorMessage = error.toString();
