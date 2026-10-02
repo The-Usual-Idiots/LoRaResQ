@@ -9,7 +9,7 @@
 | **Team** | Tanishq Mudaliar (team lead), Hrshita Balakrishnan, Saivel Konar, Selvanavya Thevar |
 | **Mentor** | Dr. Namrata Jiten Patel |
 | **Primary setting** | Rural and peri-rural India: hamlets, farms, forest-edge routes, shelters and disaster-affected localities |
-| **Prototype** | Three interoperable nodes: two personal nodes and one fixed relay |
+| **Prototype** | Three interoperable personal nodes, each carried and used by a participant |
 | **Budget ceiling** | ₹10,000, excluding tools borrowed from the college lab |
 | **Competition** | Anveshana and comparable student-innovation events |
 
@@ -72,13 +72,13 @@ One link may be blocked by a hill, trees, walls or distance. A mesh lets eligibl
 ```mermaid
 flowchart LR
     A[Farmer phone] <-->|Bluetooth LE| AN[Personal node A]
-    AN -->|LoRa| R[Roof / hill relay]
+    AN -->|LoRa| R[Participant B's personal node]
     R -->|LoRa| CN[Personal node C]
     CN <-->|Bluetooth LE| C[Health worker phone]
     A -. no cellular signal .- C
 ```
 
-The relay is **not** a cellular tower: it does not speak to SIM cards, provide internet, or require telecom backhaul. It is an unattended LoRa node placed where its antenna can hear more of the community.
+The forwarding node is **not** a cellular tower: it does not speak to SIM cards, provide internet, or require telecom backhaul. It is another participant's personal LoRaResQ node. When it receives an eligible new packet, it automatically forwards it while continuing to serve its owner's phone.
 
 ## 1.4 Responsible position
 
@@ -97,7 +97,7 @@ When normal connectivity is unavailable, a person with a paired LoRaResQ node ca
 1. send a short message to a known community member;
 2. broadcast a structured alert to the local mesh;
 3. see whether the message was accepted by the local node, transmitted, and—where possible—acknowledged by a recipient; and
-4. use a relay node to reach people beyond one direct radio hop.
+4. use another participant's personal node to reach people beyond one direct radio hop.
 
 These core local functions need no SIM, cloud account, mobile tower, Wi-Fi or subscription.
 
@@ -105,7 +105,7 @@ These core local functions need no SIM, cloud account, mobile tower, Wi-Fi or su
 
 | Capability | Prototype commitment |
 |---|---|
-| Three-node mesh | Yes: prove A → relay B → C when A and C cannot communicate directly. |
+| Three-node mesh | Yes: prove A → participant B's node → C when A and C cannot communicate directly. |
 | Phone link | Bluetooth Low Energy first; Android USB serial is a debugging fallback. |
 | Text messages | Yes: bounded-size messages with honest sent / relayed / acknowledged state. |
 | Preset alerts | Yes: SOS, medical help, fire, flood, road blocked, all safe and meeting call. |
@@ -113,7 +113,7 @@ These core local functions need no SIM, cloud account, mobile tower, Wi-Fi or su
 | Field evidence | Yes: real range, delivery and battery measurements. |
 | Payload protection | Yes: use established authenticated encryption, never an invented cipher. |
 | Airtime protection | Yes: account for time-on-air and queue traffic under a configured policy. |
-| Outdoor relay | Basic enclosed prototype; solar and weather hardening are later work. |
+| Personal-node enclosure | Basic enclosed prototype that can be safely carried and charged. |
 
 ## 2.3 Explicitly out of scope for version 1
 
@@ -132,7 +132,7 @@ Meshtastic already proves the value of affordable, low-power, encrypted and dece
 |---|---|---|
 | Network | General off-grid mesh | Small, purpose-configured local rescue mesh |
 | Experience | Flexible chats, channels and device configuration | Alert-first, low-literacy-friendly emergency workflow |
-| Deployment | Broad hardware ecosystem | Personal, relay and coordinator node kit |
+| Deployment | Broad hardware ecosystem | Personal-node kit in which every participant node can forward eligible traffic |
 | Localisation | Community-wide project | Pilot-community language, icons and operating terms |
 | Compliance | Region-aware open-source platform | India-focused configuration record and conservative prototype policy |
 | Proof | General off-grid communication | Measured local incident-coordination usefulness |
@@ -149,9 +149,9 @@ The strongest competition claim is: **“We turned a proven communication patter
 |---|---|---|
 | Farm or orchard worker | Raise an incident without walking to coverage | Personal node plus alert-first phone screen |
 | Health worker / volunteer | Coordinate assistance across hamlets | Personal node and health-centre coordinator node |
-| Forest-edge patrol or herder | Report danger in patchy coverage | Personal node and relay near a route / settlement |
-| Panchayat, school or shelter coordinator | Send area-wide instructions | Coordinator node with trusted alert controls |
-| Disaster-response volunteer | Re-establish basic local communication quickly | Portable nodes and elevated relay |
+| Forest-edge patrol or herder | Report danger in patchy coverage | Personal node; nearby participant nodes bridge a gap when available |
+| Panchayat, school or shelter coordinator | Send area-wide instructions | Coordinator's personal node with trusted alert controls |
+| Disaster-response volunteer | Re-establish basic local communication quickly | Portable personal nodes carried by the response team |
 | Trek, pilgrimage or event organiser | Coordinate a contained group in congestion or low coverage | Temporary, named-group mesh |
 
 ## 3.2 Use-case catalogue
@@ -166,7 +166,7 @@ The strongest competition claim is: **“We turned a proven communication patter
 | **Post-disaster check-in** | Tap **I am safe** | `CHECK_IN` | Small broadcast with strict repeat limit | Coordinator roster records check-in; silence is not proof of danger |
 | **Meeting or shelter instruction** | Coordinator chooses **Assemble** | `ASSEMBLE` + location / time | Broadcast with timestamp and expiry | Residents go to the announced point |
 | **Farm / equipment incident** | Send text or preset | `ASSISTANCE_NEEDED` + note | Normal-priority direct or group message | Nearby worker responds |
-| **Forest-edge hazard** | Report observed danger | `HAZARD` + landmark | Group broadcast through relay | Team changes route / notifies responsible authority |
+| **Forest-edge hazard** | Report observed danger | `HAZARD` + landmark | Group broadcast through participant nodes that hear it | Team changes route / notifies responsible authority |
 | **Event staff call** | Organiser summons stewards | `STAFF_CALL` + zone | Named-group alert | Event team handles its own procedure |
 
 ## 3.3 Alert design rules
@@ -180,12 +180,12 @@ The strongest competition claim is: **“We turned a proven communication patter
 
 ## 3.4 End-to-end example
 
-**Asha is injured near an orchard; her phone has no mobile signal. Ravi is at the health centre; an elevated school relay bridges them.**
+**Asha is injured near an orchard; her phone has no mobile signal. Ravi is at the health centre. Meera, another worker, is between them and is carrying her own LoRaResQ node.**
 
 1. Asha opens LoRaResQ and long-presses **Medical help**.
 2. Her app adds an optional landmark, then sends the alert to Node A by BLE.
 3. A displays **Queued for radio**, then **Sent to mesh** after it transmits.
-4. Relay B validates the new packet, waits a short random interval and forwards it once.
+4. Meera's Node B validates the new packet, waits a short random interval and forwards it once without interrupting Meera's own use of the node.
 5. Node C delivers the alert to Ravi’s phone; Ravi sends an acknowledgement.
 6. Only when the acknowledgement returns does Asha see **Acknowledged by Ravi**.
 7. Ravi follows the actual community response plan. The app never pretends it dispatched help automatically.
@@ -213,7 +213,7 @@ These are engineering targets, not untested marketing claims.
 | Metric | Target | Measurement |
 |---|---:|---|
 | Two-node bench reliability | 100 / 100 short messages | Five-metre controlled test |
-| Three-node relay reliability | 20 / 20 attempts | Direct link unavailable; relay active |
+| Three-node forwarding reliability | 20 / 20 attempts | Direct link unavailable; participant B's node active |
 | Alert interaction time | ≤ 30 seconds | New-user usability test |
 | Outdoor range | Report actual result | GPS-tagged / mapped trials in stated terrain |
 | Battery life | Report actual runtime | Fixed workload and known cell condition |
@@ -224,7 +224,7 @@ These are engineering targets, not untested marketing claims.
 
 - Never turn a seller’s open-field range quote into a guarantee.
 - Never call a packet “delivered” because the sender’s node accepted it.
-- Never call a relay a “tower” or LoRaResQ an internet replacement.
+- Never call a participant node a “tower” or LoRaResQ an internet replacement.
 - Never claim individual private chat until that cryptographic design exists and is reviewed.
 - Never imply regulatory approval without proof.
 
@@ -251,7 +251,7 @@ flowchart TB
     end
     subgraph Community[Community mesh]
         P[Personal nodes]
-        R[Fixed relay nodes]
+        R[Participant nodes forwarding eligible traffic]
         G[Optional future gateway]
     end
     U --> UX
@@ -268,40 +268,40 @@ flowchart TB
 1. **Human:** decides what action is needed.
 2. **Phone:** makes the radio system usable through icons, language and visible delivery state.
 3. **Node:** bridges phone data to LoRa and protects the shared channel.
-4. **Mesh:** personal and fixed nodes forward eligible messages within a small community area.
+4. **Mesh:** personal nodes forward eligible messages within a small community area. Forwarding is a behaviour of each node, not a separate infrastructure role.
 
 ## 5.2 Network roles
 
 | Role | Owner | Job | Hardware emphasis |
 |---|---|---|---|
-| **Personal node** | Worker, volunteer, resident | Pairs to one phone | Battery, compact enclosure, simple antenna |
-| **Relay** | School, panchayat, farm, health centre or hilltop host | Extends coverage; normally no paired phone | High safe mounting point, stable power, robust enclosure |
-| **Coordinator** | Named community steward | Receives and acknowledges selected alerts | Personal-node hardware plus trusted app controls |
+| **Personal node** | Worker, volunteer, resident | Pairs to its owner's phone and can forward eligible traffic | Battery, compact enclosure, simple antenna |
+| **Forwarding participant** | Any active node owner between sender and recipient | Automatically bridges a new eligible message while using their own node | The same personal-node hardware; no dedicated relay device |
+| **Coordinator** | Named community steward | Receives and acknowledges selected alerts from their personal node | Personal-node hardware plus trusted app controls |
 | **Future gateway** | Trusted organisation | Bridges selected traffic outward when connectivity exists | Wi-Fi / Ethernet / cellular; never required for local mesh |
 
-One physical node can change role through configuration. A role is an operating responsibility, not proof of stronger radio capability.
+All version-1 nodes are personal nodes. “Forwarding participant” describes what a node does for a specific packet; it is not a different product, a fixed installation or proof of stronger radio capability.
 
 ## 5.3 Minimum viable topology
 
 ```mermaid
 flowchart LR
-    A[Node A: personal sender] -->|new message| B[Node B: elevated relay]
+    A[Node A: Asha's personal node] -->|new message| B[Node B: Meera's personal node]
     B -->|one controlled forward| C[Node C: coordinator / receiver]
     A -. direct link intentionally unavailable .- C
 ```
 
-Two nodes prove a radio link. Three nodes prove the product: the relay bridges a real communication gap.
+Two nodes prove a radio link. Three nodes prove the product: a third participant's personal node bridges a real communication gap.
 
-## 5.4 Relay placement method
+## 5.4 Participant coverage method
 
-Before installation, walk the actual area and mark homes, fields, public buildings, elevation, tree cover, hills, safe antenna positions, available power and the responsible owner. Test at the height at which a person will carry a device. Place a relay for line-of-sight and community coverage, not merely where it is easy to photograph.
+Walk the actual routes where people work, travel and coordinate. Mark homes, fields, tree cover, hills, buildings and likely coverage gaps. Test with nodes carried at actual user height and note where a participant naturally becomes the bridge between two others. The prototype should prove useful movement-based coverage, not rely on an assumed fixed installation.
 
 ## 5.5 Community operating rules
 
 Agree before a pilot:
 
 1. Who may send high-priority public alerts?
-2. Who owns, charges and checks every relay?
+2. Who carries, charges and checks each personal node?
 3. What does each alert mean locally, and who responds?
 4. How is a lost node removed and its credentials handled?
 5. How long is app history retained?
@@ -346,7 +346,7 @@ flowchart TD
 | Alerts | Action-oriented preset sending | Large buttons, short description, confirmation and optional compact note |
 | Messages | Ordinary short text | Destination / group, length limit and status timeline |
 | Alert detail | Accurate state | Type, sender, time, expiry and acknowledgement identity if received |
-| Network | Basic health | Own battery, recent peers, last-heard time and relay status where known |
+| Network | Basic health | Own battery, recent peers, last-heard time and which participant nodes are currently reachable |
 | Onboarding | Pair phone with personal node | Permission explanation, connection guide, language and safety disclaimer |
 | Coordinator tools | Trusted users only | Acknowledge, clear / expire warning and compact roster status |
 | Settings | Safe user preferences | Language, display name and notification preferences; hide radio configuration |
@@ -386,7 +386,7 @@ The app must never skip to a later state without evidence.
 | FR-01 | Pair one phone with one node over BLE. | Must | Reconnect after app restart unless user removes node. |
 | FR-02 | Send short text to known node or group. | Must | Two-node and three-node tests pass. |
 | FR-03 | Send preset alerts with optional note. | Must | Receiving phone renders accurate alert. |
-| FR-04 | Relay eligible new packet at most once per node. | Must | Bounded forwarding; no duplicate UI delivery. |
+| FR-04 | Forward an eligible new packet at most once per personal node. | Must | Bounded forwarding; no duplicate UI delivery. |
 | FR-05 | Limit hops and expire old packets. | Must | Packet stops at configured policy. |
 | FR-06 | Suppress duplicates after overlap / reboot. | Must | One visible delivery per message ID. |
 | FR-07 | Request and display acknowledgement. | Must | UI changes only after matching ACK. |
@@ -565,11 +565,11 @@ Guardrails:
 - Recent-seen entries expire after a defined window but survive the active packet storm.
 - A small hop limit is chosen from field measurement; more hops consume more radio capacity.
 - Retries retain the same message ID or duplicate suppression fails.
-- Only a destination or authorised coordinator acknowledges; relays do not pretend receipt.
+- Only a destination or authorised coordinator acknowledges; intermediate forwarding nodes do not pretend receipt.
 
 ## 9.5 Airtime and capacity
 
-LoRa range is purchased with airtime. Slower settings may rescue a weak link but make every packet occupy the channel longer; every relay repeats that occupancy. Firmware calculates or conservatively estimates time-on-air before transmission.
+LoRa range is purchased with airtime. Slower settings may rescue a weak link but make every packet occupy the channel longer; every participant node that forwards it repeats that occupancy. Firmware calculates or conservatively estimates time-on-air before transmission.
 
 The user-visible policy is simple:
 
@@ -583,9 +583,9 @@ The user-visible policy is simple:
 
 Before testing, the only defensible claim is:
 
-> **LoRaResQ is designed for kilometre-scale links in favourable conditions and for extending local reach through relays; actual coverage is measured per terrain and installation.**
+> **LoRaResQ is designed for kilometre-scale links in favourable conditions and for extending local reach through other participants' nodes; actual coverage is measured per terrain, movement and installation.**
 
-The most effective improvements are usually antenna height, safe relay placement, a relay in the gap, careful modem settings, and only then transmit power within the applicable rules.
+The most effective improvements are usually better participant placement along the route, an additional participant node in the gap, antenna height where appropriate, careful modem settings, and only then transmit power within the applicable rules.
 
 ---
 
@@ -693,9 +693,9 @@ Before first transmission:
 
 Battery result format: **“X hours under a defined workload”**, including cell condition, BLE state, radio state, payload rate, screen state and temperature—not a universal battery-life claim.
 
-## 11.5 Future rugged relay
+## 11.5 Personal-node carry guidance
 
-After core proof, a relay needs weather-resistant enclosure, cable glands, safe pole / roof mounting, stable solar or mains power, physical security, an inspection owner and a site survey. None of these should delay the three-node mesh demonstration.
+Every version-1 node is carried by a person. After core proof, improve each device for that reality: weather-resistant but serviceable enclosure, protected charging port, secure antenna connection, lanyard or belt attachment, drop resistance, clear battery indication and a named owner. Do not add fixed infrastructure, pole mounting or solar charging to the prototype scope.
 
 ---
 
@@ -803,7 +803,7 @@ Each test record names firmware and app build, radio profile, antenna, node role
 | Configuration read-back | Read every node’s actual radio config | Each matches approved profile | Serial log / screenshot |
 | Bench link | 100 messages at five metres | 100 correctly decoded | Timestamped log |
 | BLE bridge | Phone sends and receives through one node | Reconnect and operation work after app restart | Screen recording + logs |
-| Multi-hop | A and C cannot communicate directly; B relays | 20 / 20 controlled attempts delivered once | Direct-failure / relay-success record |
+| Multi-hop | A and C cannot communicate directly; participant B carries an active node between them | 20 / 20 controlled attempts delivered once | Direct-failure / participant-forwarding-success record |
 | Duplicate suppression | Triangle topology | One visible delivery per message ID | Packet and UI logs |
 | Hop limit | Chain longer than TTL where feasible | Packet stops at policy | Serial log |
 | Acknowledgement | C receives ACK-requested message | A changes state only after C ACK | Timeline recording |
@@ -828,11 +828,11 @@ Each test record names firmware and app build, radio profile, antenna, node role
 
 ## 14.4 Competition mesh proof
 
-1. With relay B unavailable, show A cannot reach C.
-2. Enable B at the intermediate location.
-3. Send A → C and show a unique message arrival through one relay.
+1. With participant B's node switched off or out of the route, show A cannot reach C.
+2. Have participant B carry their powered personal node to the intermediate location.
+3. Send A → C and show a unique message arrival through B's node.
 4. Send a medical-help preset and show named acknowledgement.
-5. Explain that B extends a local radio mesh; do not call it a tower.
+5. Explain that B's ordinary personal node extends a local radio mesh; do not call it a tower.
 
 ---
 
@@ -847,7 +847,7 @@ Begin with a supervised micro-pilot: a school campus plus adjoining field, farm 
 - [ ] Community partner, site owner and node owners approve the pilot.
 - [ ] Team confirms current regulatory requirements for actual location and configuration.
 - [ ] Every node has recorded ID, firmware, radio profile and responsible person.
-- [ ] Every relay has safe mounting, power plan, enclosure and inspection date.
+- [ ] Every participant has a safely enclosed, charged personal node and understands forwarding is automatic for eligible traffic.
 - [ ] Alert meanings, coordinator names and fallback actions are explained.
 - [ ] Participants understand it is best-effort and complements official services.
 - [ ] Lost-device and key-rotation procedure is ready.
@@ -857,11 +857,11 @@ Begin with a supervised micro-pilot: a school campus plus adjoining field, farm 
 
 | Cadence | Activity |
 |---|---|
-| Daily during pilot | Check relay power / last-heard status and report faults. |
-| Weekly | Inspect enclosure, antenna, battery and mounting. |
+| Daily during pilot | Participants check battery and connection status before entering the coverage area. |
+| Weekly | Inspect personal-node enclosure, antenna, battery and charging cable. |
 | Monthly | Run compact alert drill, review incidents and delete unneeded history. |
 | Lost device | Remove from roster and rotate shared key if exposure is plausible. |
-| Major incident | Check fixed nodes before assuming coverage exists. |
+| Major incident | Confirm which participants are active and where they are before assuming a forwarding path exists. |
 
 ## 15.4 Printed quick-start card
 
@@ -897,13 +897,13 @@ The engineering posture is conservative and auditable:
 | Emergency claims | Communication aid, never emergency-service replacement. |
 | Privacy | Minimum data; location opt-in; no sensitive records in broadcast. |
 | Equity | Test language, icons and workflow with intended users, not only technical peers. |
-| Governance | Community owns alert meaning, relay care and access decisions. |
+| Governance | Community owns alert meaning, participant orientation and access decisions. |
 | Misuse | Limit high-priority controls and define revocation process. |
 | Safety | Never ask people to enter unsafe areas merely to test range. |
 
 ## 16.3 Environmental responsibility
 
-Use rechargeable cells safely, dispose of damaged batteries correctly, prefer labelled repairable prototypes and never install a relay on a public structure without permission.
+Use rechargeable cells safely, dispose of damaged batteries correctly, prefer labelled repairable prototypes and obtain permission before organised field tests on another person's property.
 
 ---
 
@@ -930,7 +930,7 @@ Re-check all pricing with Indian suppliers before purchase.
 
 1. Confirm exact radio, voltage and power design.
 2. Validate two boards, two radios and safe power path.
-3. Acquire the third relay node once core stack is confirmed, unless shipping makes one order safer.
+3. Acquire the third personal node once the core stack is confirmed, unless shipping makes one order safer.
 4. Borrow lab tools before spending budget on them.
 5. Defer GPS, solar, custom PCB and premium enclosure until mesh proof exists.
 
@@ -942,11 +942,11 @@ Re-check all pricing with Indian suppliers before purchase.
 | Wrong region / default radio setting | Medium | High | Datasheet review, read-back profile, peer check | Before outdoor test |
 | Battery damage | Low–medium | High | Protected charging, genuine cells, supervision | Stop on heat / swelling |
 | Channel congestion | Medium | Medium | Small payloads, queueing, limited forwarding, no telemetry flood | Stress logs degrade |
-| Bench succeeds but field fails | Medium | High | Test pilot terrain early; relocate relay; report limits | Week 8 |
+| Bench succeeds but field fails | Medium | High | Test actual participant routes early; adjust spacing and movement; report limits | Week 8 |
 | BLE pairing trouble | Medium | Medium | Reconnection flow and serial debug fallback | User-test failures |
 | Protocol drift | Medium | Medium | Versioned spec and test vectors | Any incompatibility |
 | Security overclaim | Medium | High | State v1 community-key limits | Pitch review |
-| Relay unmaintained / stolen | Medium | Medium | Named owner, inspection schedule, spare plan | Missed checks |
+| Forwarding participant unavailable | Medium | Medium | Show reachable-peer status, teach users to change position or wait for another participant, carry a spare node | Missed check-in |
 | Feature creep | High | High | Scope gates; three-node proof before extras | Weekly review |
 | Regulatory misunderstanding | Medium | High | Official sources and qualified advice for real deployment | Before public / sale |
 
@@ -956,7 +956,7 @@ Re-check all pricing with Indian suppliers before purchase.
 
 ## 18.1 Three-sentence pitch
 
-When mobile coverage is weak, overloaded or disrupted, a person may be unable to send even a basic request for help. LoRaResQ is a low-cost, community-owned mesh of small radio nodes that lets nearby phones exchange short messages and emergency alerts without a SIM, internet or cellular tower. Inspired by the proven LoRa-mesh model used by Meshtastic, it focuses on rural emergency workflows: local-language preset alerts, relay placement, measured field evidence and honest delivery status.
+When mobile coverage is weak, overloaded or disrupted, a person may be unable to send even a basic request for help. LoRaResQ is a low-cost, community-owned mesh of personal radio nodes that lets nearby phones exchange short messages and emergency alerts without a SIM, internet or cellular tower. Inspired by the proven LoRa-mesh model used by Meshtastic, it focuses on rural emergency workflows: local-language preset alerts, participant-assisted forwarding, measured field evidence and honest delivery status.
 
 ## 18.2 Demonstration story
 
@@ -964,7 +964,7 @@ When mobile coverage is weak, overloaded or disrupted, a person may be unable to
 |---|---|
 | Problem | A phone with no cellular service cannot send normal app messages. |
 | Connection | Phone connects by BLE to a pocket LoRaResQ node. |
-| Mesh proof | A cannot reach C directly; relay B makes the message arrive. |
+| Mesh proof | A cannot reach C directly; B's ordinary personal node makes the message arrive. |
 | Rescue workflow | Medical / flood / fire preset has clear information, expiry and state tracking. |
 | Responsibility | Acknowledgement is not a rescue guarantee; official channels remain primary when available. |
 | Evidence | Measured results, budget, radio-profile record and usability test. |
@@ -973,10 +973,10 @@ When mobile coverage is weak, overloaded or disrupted, a person may be unable to
 
 1. **0:00–0:25:** Phone in airplane mode: “Without a network, an ordinary app cannot help.”
 2. **0:25–0:50:** Show paired LoRaResQ node, battery and connection state.
-3. **0:50–1:20:** With relay B off, show A cannot reach C.
-4. **1:20–1:50:** Enable B and show A → B → C delivery.
+3. **0:50–1:20:** With participant B's personal node off or out of position, show A cannot reach C.
+4. **1:20–1:50:** Have B enter the intermediate position with their own node and show A → B → C delivery.
 5. **1:50–2:20:** Send medical-help alert; C acknowledges; A shows the named acknowledgement.
-6. **2:20–2:45:** “Meshtastic proves the LoRa mesh category. Our contribution is the rural rescue layer: preset actions, local-language clarity, relay roles and India-aware controls.”
+6. **2:20–2:45:** “Meshtastic proves the LoRa mesh category. Our contribution is the rural rescue layer: preset actions, local-language clarity, participant-assisted forwarding and India-aware controls.”
 7. **2:45–3:00:** “Text and alerts only; best-effort; complements official emergency channels.”
 
 ## 18.4 Likely questions
@@ -999,7 +999,7 @@ When mobile coverage is weak, overloaded or disrupted, a person may be unable to
 
 | Decision | Why |
 |---|---|
-| Build three nodes | Only three nodes prove a relay mesh. |
+| Build three nodes | Only three nodes prove that one participant's personal node can bridge two others. |
 | Phone plus personal radio node | Familiar UI paired with off-grid radio link. |
 | Flutter app | Existing repository already uses Flutter. |
 | Controlled flooding first | More achievable and inspectable than route discovery. |
@@ -1024,7 +1024,7 @@ When mobile coverage is weak, overloaded or disrupted, a person may be unable to
 2. Create `docs/protocol.md` with precise fields, limits, state transitions and test vectors.
 3. Build two safely powered bench nodes; save their configuration read-back.
 4. Replace the Flutter counter app with an offline alert-flow prototype using a fake `NodeTransport`.
-5. Complete the three-node relay proof before adding GPS, maps, solar hardware or cloud features.
+5. Complete the three-node participant-forwarding proof before adding GPS, maps, solar hardware or cloud features.
 
 ---
 
@@ -1044,7 +1044,7 @@ When mobile coverage is weak, overloaded or disrupted, a person may be unable to
 | **LoRa** | Low-data-rate, long-range radio modulation. |
 | **Mesh** | Nodes rebroadcast eligible messages to bridge coverage gaps. |
 | **Node** | Battery-powered controller, radio and antenna device. |
-| **Relay** | Fixed or unattended node extending coverage. |
+| **Forwarding node** | Any participant's personal node while it automatically forwards an eligible packet. It is not separate or fixed infrastructure. |
 | **RSSI / SNR** | Radio diagnostics useful in tests; neither guarantees future delivery. |
 | **TTL / hop limit** | Field that prevents endless propagation. |
 
