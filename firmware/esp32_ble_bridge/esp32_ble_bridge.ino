@@ -186,7 +186,7 @@ class WriteCallbacks : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic *characteristic,
                NimBLEConnInfo &connInfo) override {
     const uint16_t connId = connInfo.getConnHandle();
-    String value = String(characteristic->getValue().c_str());
+    const std::string value = characteristic->getValue();
     ClientBuffer *buffer = nullptr;
     for (size_t index = 0; index < clientBufferCount; index++) {
       if (clientBuffers[index].connId == connId) {
@@ -199,8 +199,9 @@ class WriteCallbacks : public NimBLECharacteristicCallbacks {
       buffer = &clientBuffers[clientBufferCount++];
     }
     if (buffer == nullptr) return;
-    logEvent("IN_CHUNK", "conn=" + String(connId) + " bytes=" + String(value.length()));
-    buffer->inbound += value;
+    logEvent("IN_CHUNK", "conn=" + String(connId) +
+                              " bytes=" + String(value.length()));
+    buffer->inbound.concat(value.data(), value.length());
     while (buffer->inbound.length() >= 8) {
       const uint16_t payloadLength =
           (uint8_t)buffer->inbound[6] | ((uint8_t)buffer->inbound[7] << 8);

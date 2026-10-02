@@ -150,16 +150,23 @@ class IdentityStore {
   IdentityStore(this._store);
 
   static const _identityKey = 'participant-identity.v1';
-  static const _identityChannel = MethodChannel('loraresq/device_identity');
+  static const _identityChannel = MethodChannel('lorare_sq/notifications');
   final LocalStore _store;
 
   Future<MeshParticipant> readOrCreate() async {
     final existing = await _store.read(_identityKey);
-    if (existing != null && existing.isNotEmpty) {
+    final platformId = await _readPlatformIdentity();
+    if (platformId != null && platformId != existing) {
+      await _store.write(_identityKey, platformId);
+      return MeshParticipant(id: platformId, name: _deviceName(platformId));
+    }
+    if (existing != null &&
+        existing.isNotEmpty &&
+        !existing.startsWith('device-') &&
+        !existing.startsWith('android-')) {
       return MeshParticipant(id: existing, name: _deviceName(existing));
     }
-    final platformId = await _readPlatformIdentity();
-    final id = platformId ?? 'device-${DateTime.now().microsecondsSinceEpoch}';
+    final id = platformId ?? existing ?? 'device-${DateTime.now().microsecondsSinceEpoch}';
     await _store.write(_identityKey, id);
     return MeshParticipant(id: id, name: _deviceName(id));
   }
@@ -178,7 +185,7 @@ class IdentityStore {
     try {
       final value = await _identityChannel
           .invokeMethod<String>('getId')
-          .timeout(const Duration(milliseconds: 10));
+          .timeout(const Duration(seconds: 1));
       if (value == null || value.isEmpty) return null;
       return 'android-$value';
     } on MissingPluginException {
