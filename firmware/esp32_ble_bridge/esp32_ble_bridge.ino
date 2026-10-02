@@ -307,7 +307,8 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     connectedClients++;
     logEvent("BLE_CONNECTED", "clients=" + String(connectedClients) +
                                   " conn=" + String(connInfo.getConnHandle()));
-    NimBLEDevice::startAdvertising();
+    NimBLEDevice::getAdvertising()->setScanFilter(false, false);
+    server->startAdvertising();
   }
 
   void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo,
@@ -327,7 +328,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
       logEvent("ROSTER_CLEARED", "last client disconnected");
       notifyRoster();
     }
-    NimBLEDevice::startAdvertising();
+    server->startAdvertising();
   }
 };
 
@@ -348,6 +349,7 @@ void setup() {
   notifyCharacteristic->setCallbacks(new NotifyCallbacks());
   service->start();
   NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
+  advertising->setScanFilter(false, false);
   advertising->addServiceUUID(SERVICE_UUID);
   NimBLEDevice::startAdvertising();
   logEvent("READY", "name=LoRaResQ ESP32 service=" + String(SERVICE_UUID));

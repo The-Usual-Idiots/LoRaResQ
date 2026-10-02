@@ -185,7 +185,7 @@ class IdentityStore {
     try {
       final value = await _identityChannel
           .invokeMethod<String>('getId')
-          .timeout(const Duration(seconds: 1));
+          .timeout(const Duration(seconds: 5));
       if (value == null || value.isEmpty) return null;
       return 'android-$value';
     } on MissingPluginException {
