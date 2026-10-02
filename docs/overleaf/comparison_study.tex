@@ -89,9 +89,10 @@ standards pages in October 2026 using combinations of ``LoRa'', ``LoRaWAN'',
 ``scalability'', and ``Meshtastic''. Sources were included when they were
 journal articles, scholarly preprints, or primary technical specifications
 with a clear description of architecture, constraints, or measured results.
-The five scholarly papers selected for this focused comparison are adjacent
-LoRa, LoRaWAN, mesh, and Meshtastic studies rather than emergency-response
-trials; this limitation is recorded explicitly below. Sources were also
+The six scholarly papers selected for this focused comparison are mostly
+adjacent LoRa, LoRaWAN, mesh, and Meshtastic studies; LoRaMoto is an
+emergency-specific simulation study rather than a field trial. This limitation
+is recorded explicitly below. Sources were also
 screened for direct relevance to short-message communication rather than
 general high-bandwidth networking. Official technical documentation is used
 only to clarify terminology, regulation, and protocol behaviour; it is not
@@ -154,22 +155,32 @@ collisions, data-rate trade-offs, and duty-cycle-related constraints
 The LoRaWAN specification defines the end-device, gateway, and network-server
 architecture used by this comparison \cite{lorawan2020}.
 
-\subsection{LoRa mesh and disruption-tolerant systems}
+\subsection{LoRa mesh systems}
 Peer-to-peer LoRa systems remove the requirement for a permanent gateway by
 allowing nodes to relay selected packets. A recent journal review comparing
-open-source and proprietary LoRa mesh technologies identifies energy use,
-latency, throughput, routing, and interoperability as important design
+open-source and proprietary LoRa mesh technologies identifies cost, energy
+efficiency, latency, range, security, and routing as the main design
 trade-offs \cite{hammouti2024}. A mesh can extend reach when a direct path is
 blocked, but every relay consumes airtime and energy. Duplicate suppression,
 hop limits, queue policy, packet expiry, and acknowledgement semantics are
 therefore essential.
+LoRaMoto is a closer emergency-specific example: it extends LoRaWAN with
+end-node forwarding for civilian safety-status messages after an earthquake,
+but its evaluation is simulation-based rather than a field validation
+\cite{loramoto2021}.
 
 \subsection{Meshtastic as a practical reference}
 Meshtastic is an important open-source reference for practical off-grid LoRa
-mesh communication. Its official documentation describes a hop-limited
-rebroadcast mesh, regional radio configuration, and encrypted channels
-\cite{meshtasticdocs}. It demonstrates that inexpensive nodes, user devices,
-and mesh forwarding can be combined in a community project. A recent Meshtastic-based campus system reports a maximum field link of
+mesh communication. Its official documentation describes managed flooding with
+hop-limited, SNR-aware rebroadcast, next-hop routing for direct messages since
+firmware 2.6, and CSMA/CA channel access \cite{meshtasticdocs}. It
+demonstrates that inexpensive nodes, user devices, and mesh forwarding can be
+combined in a community project. Its acknowledgement semantics are also
+instructive: a broadcast is treated as implicitly acknowledged once the sender
+hears any node rebroadcast it, whether or not that node holds the channel key
+\cite{meshtasticdocs}. This is the local-acceptance versus
+recipient-acknowledgement distinction that LoRaResQ's status model is meant to
+expose. A recent Meshtastic-based campus system reports a maximum field link of
 approximately 2.47 km under its stated campus conditions \cite{meshtastic2026}.
 The paper's body does not establish that distance as a statistically
 validated packet-delivery result: its reported tracker frames, duty-cycle
@@ -191,7 +202,6 @@ architectural fit, not measured performance.
 \caption{Qualitative comparison for rural emergency messaging}
 \label{tab:comparison}
 \centering
-\small
 \scriptsize
 \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X
 >{\raggedright\arraybackslash}X
@@ -207,8 +217,8 @@ and security} \\
 Cellular / Internet & Required & Provider infrastructure &
 High bandwidth & Phone-dependent & Mature; unavailable during outage \\
 Wi-Fi ad hoc & Not necessarily & Direct / configurable mesh &
-High bandwidth, short range & Moderate & Configuration-heavy; security depends on setup \\
-Bluetooth LE & No Internet required & Direct / local relay &
+High bandwidth, short range & Short range; higher power draw & Configuration-heavy; security depends on setup \\
+Bluetooth LE & Not required & Direct / local relay &
 Small payloads & Good for short links & Good phone link; not wide-area \\
 LoRaWAN & Gateway and server normally required & Star-of-stars &
 Small, delay-tolerant & Good low-power range & Mature, but gateway and server required \\
@@ -216,9 +226,9 @@ Generic LoRa mesh & No permanent gateway required & Multi-hop peer &
 Small, delay-tolerant & Good, relay-dependent & Routing and security policy required \\
 Meshtastic reference & Configurable; can be off-grid & Multi-hop peer &
 Small text and data & Good, topology-dependent & Mature reference; broad configuration surface; encrypted channels available \\
-\textbf{LoRaResQ proposal} & \textbf{No permanent gateway for prototype} &
+\textbf{LoRaResQ (proposed)} & \textbf{No permanent gateway for prototype} &
 \textbf{Bounded multi-hop} & \textbf{Alerts and short text} &
-\textbf{Battery-oriented} & \textbf{Alert-first; explicit status and security plan} \\
+\textbf{Battery-oriented (target)} & \textbf{Alert-first; status model and security planned; unvalidated, no field data} \\
 \bottomrule
 \end{tabularx}
 \end{table*}
@@ -262,6 +272,10 @@ enrolment and revocation must be defined before field use, and emergency
 alerts should not contain unnecessary personal or medical data. The prototype
 will demonstrate the interface and packet-state model first; cryptographic
 interoperability and resistance to impersonation remain validation tasks.
+Broadcast alerts need separate protection: because any node can originate a
+broadcast, alerts should carry sender authentication, for example a
+per-community key or per-node signature, and relaying nodes should forward
+one-to-one messages as ciphertext they cannot read.
 
 The system is deliberately not specified as a guaranteed life-safety service.
 It cannot dispatch an ambulance automatically, guarantee delivery, replace
@@ -271,13 +285,25 @@ cellular or official emergency communication works, users should use it.
 \section{India-Specific Regulatory Context}
 For a rural Indian prototype, the radio configuration must be selected only
 after checking the current Wireless Planning and Coordination (WPC) rules.
-The 2021 exemption rules cover low-power equipment in the 865--868 MHz band
-on a non-interference, non-protection basis \cite{india2021}. A prototype
-must use a compliant regional plan, respect applicable power, bandwidth, and
-duty-cycle limits, and not assume that an EU868 preset is automatically legal
-in India. Under Rule 5, covered equipment shall be type approved before the
-relevant import, sale, or deployment activity. These regulatory checks are
-part of the deployment record, not results claimed by this literature review.
+The 2021 exemption rules (G.S.R.~853(E), 10 December 2021) allow low-power
+short-range devices in the 865--868 MHz band on a non-interference,
+non-protection, shared and non-exclusive basis, subject to per-category limits
+\cite{india2021}. Two categories are candidates for an alert-messaging node:
+non-specific short-range devices (25 mW e.r.p., 1\% duty cycle, with an FHSS
+condition on occupied bandwidth) and tracking, tracing and data-acquisition
+devices (500 mW e.r.p., adaptive power control, duty cycle $\leq$10\% for
+network access points and $\leq$2.5\% otherwise, bandwidth $\leq$200 kHz).
+Which category covers a 125 kHz LoRa emergency-messaging node has not been
+confirmed with WPC, so the prototype is designed against the stricter limits.
+Rule 5 requires covered equipment to conform to these limits, to be type
+approved, and to comply with the corresponding EN standard \cite{india2021}.
+An EU868 preset must not be assumed legal in India. The transmit power,
+bandwidth, and duty-cycle settings used in any trial belong in the deployment
+record; they are not results claimed by this literature review.
+The 22 dBm campus configuration reported in the Meshtastic study must not be
+copied into an India trial: it exceeds the nominal 25 mW limit before
+antenna-gain and e.r.p. calculations. Firmware should enforce the selected
+power cap rather than relying on a regional preset.
 
 \section{Proposed Evaluation Plan}
 Because the project currently has no hardware, all hardware-related values in
@@ -290,17 +316,24 @@ validation should include:
   \item twenty three-node forwarding attempts as a feasibility smoke test,
   with the direct A-C link unavailable or intentionally attenuated;
   \item outdoor trials in open and obstructed terrain, recording distance,
-  antenna, spreading-factor settings, packet loss, and acknowledgements;
+  antenna, spreading-factor settings, transmit power, RSSI/SNR, airtime and
+  duty cycle, packet loss, and acknowledgements;
   \item battery measurements under a declared workload;
   \item duplicate and stale-packet tests; and
+  \item phone-to-node Bluetooth Low Energy range, reconnection, and message
+  transfer tests for the hybrid interface;
   \item a short usability test measuring whether a first-time user can send
   an alert within thirty seconds without confusing local acceptance with
   recipient acknowledgement. The thirty-second target is an engineering
   usability target for the prototype, not a safety standard.
 \end{enumerate}
 
-The results should be reported with the test environment and limitations.
-Vendor range claims should not be presented as project results. No deployment
+The results should be reported with the test environment and limitations,
+including delivery proportions with a 95\% confidence interval. The two-node
+and three-node tests are prototype targets; if three radio modules are not
+available, the forwarding test must be reported as emulated rather than as a
+three-node hardware result. Vendor range claims should not be presented as
+project results. No deployment
 should be described as public-safety-ready until radio compliance, electrical
 safety, security, and field reliability have been reviewed.
 
@@ -312,10 +345,11 @@ and traffic loads, so their numerical results cannot be transferred directly
 to LoRaResQ. The proposed system has not yet been tested because the team does
 not currently possess the radio hardware. The comparison therefore supports
 the design rationale and test plan; it does not prove range, battery life,
-reliability, or emergency effectiveness. In addition, the five scholarly
-studies are adjacent technology sources rather than emergency or rural field
-trials, and excluding conference proceedings may omit relevant disaster
-communication evidence. The proposed security controls are design
+reliability, or emergency effectiveness. In addition, the scholarly studies
+are mostly adjacent technology sources rather than emergency or rural field
+trials; LoRaMoto is emergency-specific but simulation-based. Excluding
+conference proceedings may omit relevant disaster communication evidence. The
+proposed security controls are design
 requirements, not a completed security evaluation.
 
 \section{Conclusion}
@@ -378,6 +412,12 @@ M. Hammouti, O. Moussaoui, M. Hassine, and A. Betari, ``Exploring open
   source and proprietary LoRa mesh technologies,'' \emph{Indonesian
   Journal of Electrical Engineering and Computer Science}, vol. 34, no. 2,
   pp. 960--969, 2024. doi: 10.11591/ijeecs.v34.i2.pp960-969.
+
+\bibitem{loramoto2021}
+R. Pueyo Centelles \emph{et al.}, ``LoRaMoto: A communication system to
+  provide safety awareness among civilians after an earthquake,''
+  \emph{Future Generation Computer Systems}, 2021.
+  doi: 10.1016/j.future.2020.07.040.
 
 \bibitem{meshtasticdocs}
 Meshtastic, ``Meshtastic documentation: Mesh broadcast algorithm and
