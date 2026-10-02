@@ -6,17 +6,16 @@ embedded in the LaTeX bibliography.
 
 1. [Google Scholar: Understanding the Limits of LoRaWAN](https://scholar.google.com/scholar?q=%22Understanding+the+limits+of+LoRaWAN%22) | [DOI](https://doi.org/10.1109/MCOM.2017.1600613) | [Direct arXiv PDF](https://arxiv.org/pdf/1607.08011.pdf)
 2. [Google Scholar: A Study of LoRa](https://scholar.google.com/scholar?cluster=7814386960058297564) | [DOI](https://doi.org/10.3390/s16091466) | [Direct MDPI PDF](https://www.mdpi.com/1424-8220/16/9/1466/pdf)
-3. [Google Scholar: A Survey on Scalable LoRaWAN for Massive IoT](https://scholar.google.com/scholar?q=%22A+Survey+on+Scalable+LoRaWAN+for+Massive+IoT%22) | [DOI](https://doi.org/10.1109/COMST.2023.3274934) | [arXiv preprint](https://arxiv.org/pdf/2202.11082.pdf)
-4. [Google Scholar: Exploring Open Source and Proprietary LoRa Mesh Technologies](https://scholar.google.com/scholar?q=%22Exploring+open+source+and+proprietary+LoRa+mesh+technologies%22) | [DOI](https://doi.org/10.11591/IJEECS.V34.I2.PP960-969)
-5. [Google Scholar: A Meshtastic-based LoRa Mesh System](https://scholar.google.com/scholar?q=%22A+Meshtastic-based+LoRa+mesh+system+for+smart+campus+applications%22) | [arXiv record and PDF](https://arxiv.org/abs/2605.20379)
+3. [IEEE 802.11-2020 standard](https://standards.ieee.org/standard/802_11-2020.html)
+4. [Bluetooth Core Specification 5.4](https://www.bluetooth.com/specifications/specs/core-specification-5-4/)
+5. [Google Scholar: A Survey on Scalable LoRaWAN for Massive IoT](https://scholar.google.com/scholar?q=%22A+Survey+on+Scalable+LoRaWAN+for+Massive+IoT%22) | [DOI](https://doi.org/10.1109/COMST.2023.3274934) | [arXiv preprint](https://arxiv.org/pdf/2202.11082.pdf)
 6. [LoRaWAN Specification v1.0.3](https://lora-alliance.org/wp-content/uploads/2020/11/lorawan1.0.3.pdf)
-7. [Meshtastic mesh broadcast algorithm](https://meshtastic.org/docs/technical/mesh-broadcast-algorithm/)
-8. [India WPC 865--868 MHz exemption rules, 2021](https://thc.nic.in/Central%20Governmental%20Rules/use%20of%20low%20power%20Equipment%20in%20the%20frequency%20band%20865%20to%20868%20MHz%20for%20Short%20Range%20Devices%20Exemption%20from%20Licence%20Rules,2021.pdf)
-9. [Bluetooth Core Specification 5.4](https://www.bluetooth.com/specifications/specs/core-specification-5-4/)
-10. [IEEE 802.11-2020 standard](https://standards.ieee.org/standard/802_11-2020.html)
-11. [3GPP TS 23.501 system architecture](https://www.3gpp.org/dynareport/23501.htm)
+7. [Google Scholar: Exploring Open Source and Proprietary LoRa Mesh Technologies](https://scholar.google.com/scholar?q=%22Exploring+open+source+and+proprietary+LoRa+mesh+technologies%22) | [DOI](https://doi.org/10.11591/IJEECS.V34.I2.PP960-969)
+8. [Meshtastic mesh broadcast algorithm](https://meshtastic.org/docs/overview/mesh-algo/)
+9. [Google Scholar: A Meshtastic-based LoRa Mesh System](https://scholar.google.com/scholar?q=%22A+Meshtastic-based+LoRa+mesh+system+for+smart+campus+applications%22) | [arXiv record and PDF](https://arxiv.org/abs/2605.20379)
+10. [India WPC 865--868 MHz exemption rules, 2021](https://thc.nic.in/Central%20Governmental%20Rules/use%20of%20low%20power%20Equipment%20in%20the%20frequency%20band%20865%20to%20868%20MHz%20for%20Short%20Range%20Devices%20Exemption%20from%20Licence%20Rules,2021.pdf)
 
-The first five are journal articles or scholarly preprints; none is a
-conference-proceedings paper. Items 6--8 are technical or regulatory sources
-included for protocol terminology, mesh behaviour, and legal context rather
-than as independent experimental evidence.
+The scholarly articles and preprint above are not conference-proceedings
+papers. The standards, documentation, and regulatory source are included for
+protocol terminology, mesh behaviour, and legal context rather than as
+independent experimental evidence.
