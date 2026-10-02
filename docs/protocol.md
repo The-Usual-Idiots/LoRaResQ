@@ -88,16 +88,27 @@ LoRa transmission, mesh forwarding, recipient receipt or emergency response.
 
 `PARTICIPANT_HELLO` carries the app's stable participant ID and display name
 after BLE connection. The reference firmware retains up to eight participant
-identities and broadcasts them in `PARTICIPANT_ROSTER` notifications to all
-subscribed BLE clients. The current bridge uses a simple in-memory roster; it
-is cleared when the last BLE client disconnects and is not yet persisted across
-ESP32 reboot.
+identities and uses the ID as the deduplication key. A new ID is stored once;
+a repeated ID refreshes its connection association and heartbeat instead of
+creating another row. Display names are also unique, so a different ID using
+an existing name is rejected without changing the stored participant.
+
+For every HELLO, the node sends a sequence-matched `STATUS` response to the
+joining phone with `state: "participantAccepted"`, a boolean `stored` field,
+and the complete `participants` array. When a new ID is stored, it also emits
+one `PARTICIPANT_ROSTER` notification to all subscribed phones, including
+already-connected phones. Flutter applies the roster from either the
+acknowledgement or the unsolicited roster event, so the joining phone does
+not depend on notification timing.
+
+The current bridge uses a simple in-memory roster; it is cleared when the
+last BLE client disconnects and is not yet persisted across ESP32 reboot.
 Clients refresh their participant hello every five seconds. The bridge expires
 participants after 15 seconds without a hello, preventing disconnected apps
 from remaining in the roster indefinitely.
-After connecting, each app explicitly requests a fresh roster in addition to
-announcing its identity. This avoids relying on notification timing from the
-other client's hello.
+After connecting, each app still explicitly requests a fresh roster as a
+recovery path in addition to announcing its identity. This is not required
+for the normal registration acknowledgement flow.
 
 The Flutter transport serializes all writes per BLE connection, waits 25 ms
 between chunks and retries Android `WRITE_REQUEST_BUSY` responses up to three
@@ -117,6 +128,8 @@ Each line begins with `[LoRaResQ]` and an event name:
 | `FRAME_REJECTED` / `FRAME_IGNORED` | Invalid or unsupported input |
 | `SEND_TEXT` | Text command payload received |
 | `PARTICIPANT_HELLO` | App identity announcement received |
+| `PARTICIPANT_STORED` / `PARTICIPANT_REFRESHED` | Registration was added or refreshed without duplication |
+| `PARTICIPANT_REJECTED_DUPLICATE_NAME` | Registration was rejected because its display name is already used |
 | `ROSTER_UPDATED` / `ROSTER_CLEARED` | Participant roster changed |
 
 Do not treat serial output as proof of LoRa delivery; it proves only the local

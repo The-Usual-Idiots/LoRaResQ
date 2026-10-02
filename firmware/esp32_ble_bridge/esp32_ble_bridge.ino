@@ -56,7 +56,7 @@ String jsonField(const String &json, const char *field) {
   return json.substring(valueStart, valueEnd);
 }
 
-void notifyRoster() {
+String rosterJson() {
   String json = "{\"participants\":[";
   for (size_t index = 0; index < participantCount; index++) {
     if (index > 0) json += ",";
@@ -69,24 +69,35 @@ void notifyRoster() {
     json += "\"}";
   }
   json += "]}";
+  return json;
+}
+
+void notifyRoster() {
+  const String json = rosterJson();
   logEvent("ROSTER_UPDATED", "participants=" + String(participantCount));
   notifyFrame(6, 0, json);
 }
 
-void rememberParticipant(const String &id, const String &name, uint16_t connId) {
-  if (id.length() == 0 || name.length() == 0) return;
+bool rememberParticipant(const String &id, const String &name, uint16_t connId) {
+  if (id.length() == 0 || name.length() == 0) return false;
   for (size_t index = 0; index < participantCount; index++) {
     if (participants[index].id == id) {
       participants[index].name = name;
       participants[index].lastHeard = millis();
       participants[index].connId = connId;
-      notifyRoster();
-      return;
+      logEvent("PARTICIPANT_REFRESHED", "id=" + id + " name=" + name);
+      return false;
+    }
+    if (participants[index].name == name) {
+      logEvent("PARTICIPANT_REJECTED_DUPLICATE_NAME",
+               "id=" + id + " name=" + name);
+      return false;
     }
   }
-  if (participantCount >= 8) return;
+  if (participantCount >= 8) return false;
   participants[participantCount++] = {id, name, millis(), connId};
-  notifyRoster();
+  logEvent("PARTICIPANT_STORED", "id=" + id + " name=" + name);
+  return true;
 }
 
 void pruneParticipants() {
@@ -221,11 +232,19 @@ class WriteCallbacks : public BLECharacteristicCallbacks {
       } else if (type == 5) {
         logEvent("PARTICIPANT_HELLO", "seq=" + String(sequence) +
                                         " payload=" + payload);
-        rememberParticipant(
-            jsonField(payload, "participantId"),
-            jsonField(payload, "displayName"), connId);
+        const String participantId = jsonField(payload, "participantId");
+        const String displayName = jsonField(payload, "displayName");
+        const bool added = rememberParticipant(
+            participantId, displayName, connId);
+        // The joining phone gets a reverse acknowledgement containing the
+        // complete roster. Existing phones receive the same updated table
+        // through the shared roster event below.
         notifyFrame(1, sequence,
-                    "{\"state\":\"participantAccepted\"}", connId);
+                    "{\"state\":\"participantAccepted\",\"stored\":" +
+                        String(added ? "true" : "false") +
+                        ",\"participants\":" + rosterJson().substring(16),
+                    connId);
+        if (added) notifyRoster();
       } else if (type == 7) {
         logEvent("PARTICIPANT_ROSTER_REQUEST", "seq=" + String(sequence));
         notifyRoster();

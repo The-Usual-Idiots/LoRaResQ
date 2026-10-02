@@ -15,6 +15,23 @@
 
 > **LoRaResQ is a low-cost, community-owned emergency messaging mesh that carries short texts and structured alerts between phones when mobile data, Wi-Fi and cellular coverage are unavailable, weak or disrupted.**
 
+## Current hardware acceptance phase: deterministic participant registration
+
+1. Phone A connects to the ESP32 and sends its stable participant ID and
+   display name.
+2. The ESP32 stores the ID only if that ID and display name are not already in
+   its in-memory roster, then returns a sequence-matched acknowledgement with
+   the complete roster.
+3. Phone B repeats the flow. It receives the complete roster immediately,
+   while the ESP32 sends the updated roster to Phone A and every other
+   connected app.
+4. Reconnecting an existing ID refreshes its connection without creating a
+   duplicate row. Each app labels only its own row `This device`.
+
+This phase is complete only when both phones show the same two IDs after the
+second registration and the ESP32 serial monitor shows the registration,
+deduplication, and roster-update events.
+
 LoRaResQ belongs to the same family as [Meshtastic](https://meshtastic.org/): both use low-power LoRa radios to form an off-grid, decentralised mesh. It is not a new radio invention, nor a replacement for Meshtastic. Its purpose is to focus the proven LoRa-mesh model on a rural rescue and resilience workflow: local-language alerts, clear delivery status, safe radio defaults, inexpensive node roles and a deployment playbook for a school, panchayat, farm collective or volunteer group.
 
 This document distinguishes between what the team will **demonstrate in the prototype** and what is a later **deployment direction**. That keeps the project credible and avoids promising a public-safety system before it has been tested and certified.

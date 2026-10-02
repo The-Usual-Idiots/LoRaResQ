@@ -277,6 +277,14 @@ class UniversalBleNodeTransport implements NodeTransport {
     final bytes = _reassembler.add(chunk);
     if (bytes == null) return;
     final frame = MeshProtocolCodec.decode(bytes);
+    if (frame.type == ProtocolFrameType.status &&
+        frame.payload['state'] == 'participantAccepted') {
+      final participants = _decodeParticipants(frame.payload);
+      if (participants.isNotEmpty) {
+        _participants = participants;
+        _participantUpdates.add(_participants);
+      }
+    }
     if (frame.type == ProtocolFrameType.participantRoster) {
       _participants = _decodeParticipants(frame.payload);
       _participantUpdates.add(_participants);
