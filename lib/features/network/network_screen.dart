@@ -26,12 +26,15 @@ class NetworkScreen extends StatelessWidget {
                     node == null
                         ? 'Connect a personal node to see health.'
                         : 'Battery ${node.batteryPercent ?? 'unknown'}%  •  '
-                            'Signal ${node.signalStrength} dBm',
+                              'Signal ${node.signalStrength} dBm',
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              Text('Connected apps', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Connected apps',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 8),
               if (node == null)
                 const Card(
@@ -59,7 +62,23 @@ class NetworkScreen extends StatelessWidget {
                         : controller.refreshParticipants,
                   ),
                 )
-              else
+              else ...[
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    tooltip: 'Refresh participant roster',
+                    onPressed: controller.refreshingParticipants
+                        ? null
+                        : controller.refreshParticipants,
+                    icon: controller.refreshingParticipants
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.sync),
+                  ),
+                ),
                 ...controller.participants.map(
                   (participant) => Card(
                     child: ListTile(
@@ -75,12 +94,15 @@ class NetworkScreen extends StatelessWidget {
                         participant.lastHeard == null
                             ? participant.id
                             : '${participant.id} • last heard '
-                                '${participant.lastHeard}',
+                                  '${participant.lastHeard}',
                       ),
-                      trailing: Text(participant.connected ? 'Connected' : 'Offline'),
+                      trailing: Text(
+                        participant.connected ? 'Connected' : 'Offline',
+                      ),
                     ),
                   ),
                 ),
+              ],
               const SizedBox(height: 16),
               const Card(
                 child: ListTile(
