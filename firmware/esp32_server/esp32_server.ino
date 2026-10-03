@@ -244,11 +244,18 @@ void notifyFrame(uint8_t type, uint16_t sequence, const String &json,
 
 void notifySimpleMessage(const String &json) {
   String line = json + "\n";
-  for (size_t offset = 0; offset < line.length(); offset += 20) {
-    const size_t count = min((size_t)20, line.length() - offset);
-    notifyCharacteristic->notify(
-        (uint8_t *)line.c_str() + offset, count, BLE_HS_CONN_HANDLE_NONE);
-    delay(40);
+  for (size_t participantIndex = 0; participantIndex < participantCount;
+       participantIndex++) {
+    const uint16_t connId = participants[participantIndex].connId;
+    for (size_t offset = 0; offset < line.length(); offset += 20) {
+      const size_t count = min((size_t)20, line.length() - offset);
+      const bool sent = notifyCharacteristic->notify(
+          (uint8_t *)line.c_str() + offset, count, connId);
+      if (!sent) {
+        logEvent("MESSAGE_NOTIFY_ERROR", "conn=" + String(connId));
+      }
+      delay(40);
+    }
   }
 }
 
