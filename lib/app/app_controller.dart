@@ -237,7 +237,7 @@ class AppController extends ChangeNotifier {
       );
       if (event.alertKind != null) {
         await NotificationService.instance.showAlert(
-          title: 'Incoming ${event.alertKind!.name} alert',
+          title: event.alertKind!.name.toUpperCase(),
           body: event.body,
         );
       }

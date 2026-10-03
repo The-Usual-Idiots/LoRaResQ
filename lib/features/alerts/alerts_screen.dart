@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
+import '../../data/location_service.dart';
 import '../../domain/mesh_models.dart';
 import '../shared/delivery_badge.dart';
 
@@ -15,6 +16,7 @@ class AlertsScreen extends StatefulWidget {
 
 class _AlertsScreenState extends State<AlertsScreen> {
   final _noteController = TextEditingController();
+  static const _locationService = LocationService();
   AlertKind? _selectedKind;
 
   @override
@@ -47,7 +49,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                     subtitle: Text('Alerts cannot be sent while disconnected.'),
                   ),
                 ),
-            if (widget.controller.errorMessage != null)
+              if (widget.controller.errorMessage != null)
                 Card(
                   color: Theme.of(context).colorScheme.errorContainer,
                   child: ListTile(
@@ -61,17 +63,22 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 spacing: 12,
                 runSpacing: 12,
                 children: AlertKind.values
-                    .map((kind) => _AlertButton(
-                          kind: kind,
-                          onPressed: widget.controller.connectedNode == null
-                              ? null
-                              : () => _confirmAlert(context, kind),
-                        ))
+                    .map(
+                      (kind) => _AlertButton(
+                        kind: kind,
+                        onPressed: widget.controller.connectedNode == null
+                            ? null
+                            : () => _confirmAlert(context, kind),
+                      ),
+                    )
                     .toList(),
               ),
               if (latestAlert != null) ...[
                 const SizedBox(height: 28),
-                Text('Latest alert', style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  'Latest alert',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 8),
                 Card(
                   child: ListTile(
@@ -97,14 +104,17 @@ class _AlertsScreenState extends State<AlertsScreen> {
         title: Text('Send ${_alertLabel(kind)}?'),
         content: TextField(
           controller: _noteController,
-          maxLength: maxMessageLength,
+          maxLines: 3,
           decoration: const InputDecoration(
             labelText: 'Optional landmark or note',
             hintText: 'Keep it short and actionable',
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Hold confirmed'),
@@ -113,11 +123,15 @@ class _AlertsScreenState extends State<AlertsScreen> {
       ),
     );
     if (confirmed != true || !context.mounted) return;
+    final position = await _locationService.currentPosition();
+    if (!context.mounted) return;
+    final note = _noteController.text.trim();
+    final body =
+        '${note.isEmpty ? 'Alert' : note} '
+        'lat:${position.latitude} long:${position.longitude}';
     await widget.controller.send(
       destination: 'community',
-      body: _noteController.text.trim().isEmpty
-          ? _alertLabel(_selectedKind!)
-          : '${_alertLabel(_selectedKind!)}: ${_noteController.text.trim()}',
+      body: body,
       alertKind: _selectedKind,
     );
   }
