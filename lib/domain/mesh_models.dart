@@ -1,4 +1,10 @@
-enum NodeConnectionState { disconnected, scanning, connecting, connected, error }
+enum NodeConnectionState {
+  disconnected,
+  scanning,
+  connecting,
+  connected,
+  error,
+}
 
 enum DeliveryState {
   draft,
@@ -47,6 +53,8 @@ class MeshMessage {
     required this.body,
     required this.state,
     required this.createdAt,
+    this.senderId = 'unknown',
+    this.senderName = 'Unknown sender',
     this.alertKind,
     this.broadcastedAt,
   });
@@ -56,18 +64,22 @@ class MeshMessage {
   final String body;
   final DeliveryState state;
   final DateTime createdAt;
+  final String senderId;
+  final String senderName;
   final AlertKind? alertKind;
   final DateTime? broadcastedAt;
 
   MeshMessage withState(DeliveryState nextState) => MeshMessage(
-        id: id,
-        destination: destination,
-        body: body,
-        state: nextState,
-        createdAt: createdAt,
-        alertKind: alertKind,
-        broadcastedAt: broadcastedAt,
-      );
+    id: id,
+    destination: destination,
+    body: body,
+    state: nextState,
+    createdAt: createdAt,
+    senderId: senderId,
+    senderName: senderName,
+    alertKind: alertKind,
+    broadcastedAt: broadcastedAt,
+  );
 }
 
 const maxMessageLength = 120;
@@ -89,9 +101,7 @@ bool canAdvanceDelivery(DeliveryState current, DeliveryState next) {
 
 MeshMessage advanceDelivery(MeshMessage message, DeliveryState next) {
   if (!canAdvanceDelivery(message.state, next)) {
-    throw StateError(
-      'Cannot move ${message.state.name} to ${next.name}.',
-    );
+    throw StateError('Cannot move ${message.state.name} to ${next.name}.');
   }
   return message.withState(next);
 }

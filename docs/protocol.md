@@ -102,11 +102,12 @@ already-connected phones. Flutter applies the roster from either the
 acknowledgement or the unsolicited roster event, so the joining phone does
 not depend on notification timing.
 
-The current bridge uses a simple in-memory roster; it is cleared when the
-last BLE client disconnects and is not yet persisted across ESP32 reboot.
-Clients refresh their participant hello every five seconds. The bridge expires
-participants after 15 seconds without a hello, preventing disconnected apps
-from remaining in the roster indefinitely.
+The current bridge uses a simple in-memory roster and is not yet persisted
+across ESP32 reboot. A normal BLE disconnect removes that connection's
+participant immediately and broadcasts the updated roster to the remaining
+clients. Clients refresh their participant hello every five seconds. The bridge
+also expires participants after two missed ten-second probes, covering silent
+radio loss or sudden power-off where the BLE disconnect callback may not run.
 The notify characteristic also exposes the current roster as a plain readable
 JSON value. After connecting, and whenever the user opens the roster, Flutter
 performs one direct GATT read of that value. This keeps roster retrieval

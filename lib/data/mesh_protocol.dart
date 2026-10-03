@@ -6,6 +6,7 @@ import '../domain/mesh_models.dart';
 const protocolServiceUuid = '7f6c0001-6b52-4f5d-9a5e-4f6c6f726151';
 const protocolWriteUuid = '7f6c0002-6b52-4f5d-9a5e-4f6c6f726151';
 const protocolNotifyUuid = '7f6c0003-6b52-4f5d-9a5e-4f6c6f726151';
+const protocolMessagesUuid = '7f6c0004-6b52-4f5d-9a5e-4f6c6f726151';
 
 enum ProtocolFrameType {
   hello,
@@ -65,7 +66,9 @@ class MeshProtocolCodec {
     }
     final payloadLength = data.getUint16(6, Endian.little);
     if (payloadLength != bytes.length - headerLength) {
-      throw const FormatException('LoRaResQ payload length does not match frame.');
+      throw const FormatException(
+        'LoRaResQ payload length does not match frame.',
+      );
     }
     final payload = jsonDecode(utf8.decode(bytes.sublist(headerLength)));
     if (payload is! Map) {
@@ -119,12 +122,15 @@ ProtocolFrame sendTextFrame({
   required String destination,
   required String body,
   required String senderId,
+  String senderName = 'Unknown sender',
   required String messageId,
   required String broadcastedAt,
   AlertKind? alertKind,
 }) {
   if (body.isEmpty || body.length > maxMessageLength) {
-    throw ArgumentError('Message must be between 1 and $maxMessageLength characters.');
+    throw ArgumentError(
+      'Message must be between 1 and $maxMessageLength characters.',
+    );
   }
 
   return ProtocolFrame(
@@ -134,6 +140,7 @@ ProtocolFrame sendTextFrame({
       'destination': destination,
       'body': body,
       'senderId': senderId,
+      'senderName': senderName,
       'messageId': messageId,
       'broadcastedAt': broadcastedAt,
       if (alertKind != null) 'alertKind': alertKind.name,
@@ -149,10 +156,7 @@ ProtocolFrame participantHelloFrame({
   return ProtocolFrame(
     type: ProtocolFrameType.participantHello,
     sequence: sequence,
-    payload: {
-      'participantId': participantId,
-      'displayName': displayName,
-    },
+    payload: {'participantId': participantId, 'displayName': displayName},
   );
 }
 

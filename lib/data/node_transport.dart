@@ -4,6 +4,7 @@ class MeshTransportEvent {
   const MeshTransportEvent({
     required this.messageId,
     required this.senderId,
+    required this.senderName,
     required this.destination,
     required this.body,
     required this.broadcastedAt,
@@ -12,6 +13,7 @@ class MeshTransportEvent {
 
   final String messageId;
   final String senderId;
+  final String senderName;
   final String destination;
   final String body;
   final DateTime broadcastedAt;
@@ -37,6 +39,7 @@ abstract interface class NodeTransport {
   Future<void> disconnect();
   Future<List<MeshParticipant>> connectedParticipants();
   Future<void> refreshParticipants();
+  Future<List<MeshTransportEvent>> refreshMessages();
   Future<MeshMessage> send({
     required String destination,
     required String body,
@@ -105,6 +108,9 @@ class DemoNodeTransport implements NodeTransport {
   Future<void> refreshParticipants() async {}
 
   @override
+  Future<List<MeshTransportEvent>> refreshMessages() async => const [];
+
+  @override
   Future<MeshMessage> send({
     required String destination,
     required String body,
@@ -114,7 +120,9 @@ class DemoNodeTransport implements NodeTransport {
       throw StateError('Connect a node before sending.');
     }
     if (body.trim().isEmpty || body.length > maxMessageLength) {
-      throw ArgumentError('Message must be between 1 and $maxMessageLength characters.');
+      throw ArgumentError(
+        'Message must be between 1 and $maxMessageLength characters.',
+      );
     }
 
     _messageNumber++;
@@ -125,6 +133,8 @@ class DemoNodeTransport implements NodeTransport {
       body: body.trim(),
       state: DeliveryState.acknowledged,
       createdAt: DateTime.now(),
+      senderId: 'this-device',
+      senderName: 'This device',
       alertKind: alertKind,
     );
   }

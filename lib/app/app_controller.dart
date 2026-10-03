@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import 'dart:async';
 
 import '../data/node_transport.dart';
@@ -8,10 +9,10 @@ import '../domain/mesh_models.dart';
 
 class AppController extends ChangeNotifier {
   AppController({NodeTransport? transport, LocalStore? store})
-      : _transport = transport ?? DemoNodeTransport(),
-        _messageStore = MessageStore(store ?? MemoryStore()),
-        _nodeStore = NodeStore(store ?? MemoryStore()),
-        _identityStore = IdentityStore(store ?? MemoryStore());
+    : _transport = transport ?? DemoNodeTransport(),
+      _messageStore = MessageStore(store ?? MemoryStore()),
+      _nodeStore = NodeStore(store ?? MemoryStore()),
+      _identityStore = IdentityStore(store ?? MemoryStore());
 
   final NodeTransport _transport;
   final MessageStore _messageStore;
@@ -48,8 +49,8 @@ class AppController extends ChangeNotifier {
       try {
         await _transport.setParticipantIdentity(localParticipant);
         connectedNode = await _transport.connect(rememberedNode);
-          participants = await _transport.connectedParticipants();
-          connectionState = NodeConnectionState.connected;
+        participants = await _transport.connectedParticipants();
+        connectionState = NodeConnectionState.connected;
       } catch (_) {
         connectedNode = null;
         connectionState = NodeConnectionState.disconnected;
@@ -128,12 +129,29 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshMessages() async {
+    if (connectedNode == null) return;
+    try {
+      final events = await _transport.refreshMessages();
+      for (final event in events) {
+        await _handleTransportEvent(event);
+      }
+      errorMessage = null;
+      notifyListeners();
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+    }
+  }
+
   bool get communicationEnabled => connectedNode != null;
 
   List<MeshParticipant> get messageDestinations => [
-        const MeshParticipant(id: 'community', name: 'Community'),
-        ...participants.where((participant) => participant.id != localParticipant.id),
-      ];
+    const MeshParticipant(id: 'community', name: 'Community'),
+    ...participants.where(
+      (participant) => participant.id != localParticipant.id,
+    ),
+  ];
 
   Future<MeshMessage?> send({
     required String destination,
@@ -155,6 +173,8 @@ class AppController extends ChangeNotifier {
           body: message.body,
           state: DeliveryState.broadcasted,
           createdAt: message.createdAt,
+          senderId: message.senderId,
+          senderName: message.senderName,
           alertKind: message.alertKind,
           broadcastedAt: event.broadcastedAt,
         );
@@ -172,6 +192,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> _handleTransportEvent(MeshTransportEvent event) async {
     if (event.destination != 'community' &&
+        event.destination != 'direct' &&
         event.destination != localParticipant.id) {
       return;
     }
@@ -182,20 +203,23 @@ class AppController extends ChangeNotifier {
         event.senderId == localParticipant.id) {
       return;
     }
-    final existingIndex =
-        messages.indexWhere((message) => message.id == event.messageId);
+    final existingIndex = messages.indexWhere(
+      (message) => message.id == event.messageId,
+    );
     final timestamp = event.broadcastedAt;
     if (existingIndex >= 0) {
       final existing = messages[existingIndex];
       messages[existingIndex] = MeshMessage(
-          id: existing.id,
-          destination: existing.destination,
-          body: existing.body,
-          state: DeliveryState.broadcasted,
-          createdAt: existing.createdAt,
-          alertKind: existing.alertKind,
-          broadcastedAt: timestamp,
-        );
+        id: existing.id,
+        destination: existing.destination,
+        body: existing.body,
+        state: DeliveryState.broadcasted,
+        createdAt: existing.createdAt,
+        senderId: event.senderId,
+        senderName: event.senderName,
+        alertKind: existing.alertKind,
+        broadcastedAt: timestamp,
+      );
     } else if (event.senderId != localParticipant.id) {
       messages.insert(
         0,
@@ -205,6 +229,8 @@ class AppController extends ChangeNotifier {
           body: event.body,
           state: DeliveryState.broadcasted,
           createdAt: timestamp,
+          senderId: event.senderId,
+          senderName: event.senderName,
           alertKind: event.alertKind,
           broadcastedAt: timestamp,
         ),

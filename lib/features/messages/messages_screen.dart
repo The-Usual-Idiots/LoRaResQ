@@ -61,7 +61,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   )
                   .toList(),
               onChanged: widget.controller.communicationEnabled
-                  ? (value) => setState(() => _destination = value ?? 'community')
+                  ? (value) =>
+                        setState(() => _destination = value ?? 'community')
                   : null,
             ),
             const SizedBox(height: 12),
@@ -85,15 +86,60 @@ class _MessagesScreenState extends State<MessagesScreen> {
             const SizedBox(height: 24),
             if (widget.controller.messages.isEmpty)
               const Center(child: Text('No messages yet.')),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Message history'),
+                IconButton(
+                  tooltip: 'Reload messages from ESP32',
+                  onPressed: widget.controller.connectedNode == null
+                      ? null
+                      : widget.controller.refreshMessages,
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
             ...widget.controller.messages.map(
               (message) => Card(
-                child: ListTile(
-                  title: Text(message.body),
-                  subtitle: Text(
-                    'To ${message.destination}'
-                    '${message.broadcastedAt == null ? '' : ' • Broadcasted ${message.broadcastedAt!.toLocal()}'}',
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .secondaryContainer,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              message.destination == 'community'
+                                  ? 'COMMUNITY'
+                                  : 'DIRECT',
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                          ),
+                          const Spacer(),
+                          DeliveryBadge(state: message.state),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(message.body),
+                      const SizedBox(height: 4),
+                      Text(
+                        'From ${message.senderName} • Sent '
+                        '${message.createdAt.toLocal()}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
-                  trailing: DeliveryBadge(state: message.state),
                 ),
               ),
             ),

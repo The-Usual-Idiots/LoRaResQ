@@ -7,8 +7,10 @@
 static const char *SERVICE_UUID = "7f6c0001-6b52-4f5d-9a5e-4f6c6f726151";
 static const char *WRITE_UUID = "7f6c0002-6b52-4f5d-9a5e-4f6c6f726151";
 static const char *NOTIFY_UUID = "7f6c0003-6b52-4f5d-9a5e-4f6c6f726151";
+static const char *MESSAGES_UUID = "7f6c0004-6b52-4f5d-9a5e-4f6c6f726151";
 static const uint8_t PROTOCOL_VERSION = 1;
 static NimBLECharacteristic *notifyCharacteristic;
+static NimBLECharacteristic *messagesCharacteristic;
 static NimBLEServer *bleServer;
 static uint16_t connectedClients = 0;
 static const uint16_t MAX_CONNECTED_CLIENTS = 4;
@@ -36,6 +38,7 @@ struct ClientBuffer {
 
 static ClientBuffer clientBuffers[8];
 static size_t clientBufferCount = 0;
+static String latestMessage;
 
 void logEvent(const char *event, const String &detail) {
   Serial.print("[LoRaResQ] ");
@@ -79,6 +82,32 @@ String rosterJson() {
 
 void updateRosterValue() {
   notifyCharacteristic->setValue(rosterJson());
+}
+
+void updateMessagesValue() {
+  String json = latestMessage.length() == 0
+                    ? "[]"
+                    : "[" + latestMessage + "]";
+  messagesCharacteristic->setValue(json);
+}
+
+void rememberMessage(const String &event) {
+  latestMessage = event;
+  logEvent("MESSAGE_REPLACED", "latest message overwritten");
+  updateMessagesValue();
+}
+
+void notifyHistory() {
+  String json = latestMessage.length() == 0
+                    ? "[]"
+                    : "[" + latestMessage + "]";
+  String stream = "HISTORY_BEGIN\n" + json + "\nHISTORY_END\n";
+  for (size_t offset = 0; offset < stream.length(); offset += 20) {
+    const size_t count = min((size_t)20, stream.length() - offset);
+    notifyCharacteristic->notify(
+        (uint8_t *)stream.c_str() + offset, count, BLE_HS_CONN_HANDLE_NONE);
+    delay(40);
+  }
 }
 
 void notifyRoster() {
@@ -168,6 +197,21 @@ void acknowledgeParticipantPresence(uint16_t connId, const String &id) {
   logEvent("PARTICIPANT_PRESENCE_ACK_UNKNOWN", "conn=" + String(connId));
 }
 
+bool removeParticipantByConnection(uint16_t connId) {
+  for (size_t index = 0; index < participantCount; index++) {
+    if (participants[index].connId != connId) continue;
+    logEvent("PARTICIPANT_REMOVED_DISCONNECT",
+             "id=" + participants[index].id +
+                 " conn=" + String(connId));
+    for (size_t move = index + 1; move < participantCount; move++) {
+      participants[move - 1] = participants[move];
+    }
+    participantCount--;
+    return true;
+  }
+  return false;
+}
+
 void notifyFrame(uint8_t type, uint16_t sequence, const String &json,
                  uint16_t targetConnId) {
   const uint16_t length = json.length();
@@ -198,6 +242,59 @@ void notifyFrame(uint8_t type, uint16_t sequence, const String &json,
   }
 }
 
+void notifySimpleMessage(const String &json) {
+  String line = json + "\n";
+  for (size_t offset = 0; offset < line.length(); offset += 20) {
+    const size_t count = min((size_t)20, line.length() - offset);
+    notifyCharacteristic->notify(
+        (uint8_t *)line.c_str() + offset, count, BLE_HS_CONN_HANDLE_NONE);
+    delay(40);
+  }
+}
+
+void handleSimpleMessage(const String &payload, uint16_t connId) {
+  if (jsonField(payload, "command") == "history") {
+    notifyHistory();
+    return;
+  }
+  const String messageId = jsonField(payload, "messageId");
+  const String senderId = jsonField(payload, "senderId");
+  const String senderName = jsonField(payload, "senderName");
+  const String destination = jsonField(payload, "destination");
+  const String body = jsonField(payload, "body");
+  const String alertKind = jsonField(payload, "alertKind");
+  const String broadcastedAt = jsonField(payload, "broadcastedAt");
+  uint16_t target = 0xffff;
+  if (destination == "community" || destination == "direct") {
+    target = 0;
+  } else {
+    for (size_t index = 0; index < participantCount; index++) {
+      if (participants[index].id == destination) {
+        target = participants[index].connId;
+        break;
+      }
+    }
+  }
+  if (messageId.length() == 0 || senderId.length() == 0 ||
+      destination.length() == 0 || body.length() == 0 || target == 0xffff) {
+    logEvent("MESSAGE_REJECTED", "conn=" + String(connId));
+    return;
+  }
+  String event = "{\"messageId\":\"" + messageId +
+                 "\",\"senderId\":\"" + senderId +
+                 "\",\"senderName\":\"" + senderName +
+                 "\",\"destination\":\"" + destination +
+                 "\",\"body\":\"" + body +
+                 "\",\"broadcastedAt\":\"" + broadcastedAt + "\"";
+  if (alertKind.length() > 0) {
+    event += ",\"alertKind\":\"" + alertKind + "\"";
+  }
+  event += "}";
+  rememberMessage(event);
+  logEvent("SIMPLE_MESSAGE", "destination=" + destination);
+  notifySimpleMessage(event);
+}
+
 class WriteCallbacks : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic *characteristic,
                NimBLEConnInfo &connInfo) override {
@@ -218,6 +315,14 @@ class WriteCallbacks : public NimBLECharacteristicCallbacks {
     logEvent("IN_CHUNK", "conn=" + String(connId) +
                               " bytes=" + String(value.length()));
     buffer->inbound.concat(value.data(), value.length());
+    if (buffer->inbound.startsWith("{")) {
+      const int lineEnd = buffer->inbound.indexOf('\n');
+      if (lineEnd < 0) return;
+      const String payload = buffer->inbound.substring(0, lineEnd);
+      buffer->inbound.remove(0, lineEnd + 1);
+      handleSimpleMessage(payload, connId);
+      return;
+    }
     while (buffer->inbound.length() >= 8) {
       const uint16_t payloadLength =
           (uint8_t)buffer->inbound[6] | ((uint8_t)buffer->inbound[7] << 8);
@@ -246,6 +351,7 @@ class WriteCallbacks : public NimBLECharacteristicCallbacks {
         logEvent("SEND_TEXT", "seq=" + String(sequence) + " payload=" + payload);
         const String messageId = jsonField(payload, "messageId");
         const String senderId = jsonField(payload, "senderId");
+        const String senderName = jsonField(payload, "senderName");
         const String destination = jsonField(payload, "destination");
         const String body = jsonField(payload, "body");
         const String alertKind = jsonField(payload, "alertKind");
@@ -256,6 +362,7 @@ class WriteCallbacks : public NimBLECharacteristicCallbacks {
         String event = "{\"messageId\":\"" + messageId +
                        "\",\"senderId\":\"" + senderId +
                        "\",\"destination\":\"" + destination +
+                       "\",\"senderName\":\"" + senderName +
                        "\",\"body\":\"" + body +
                        "\",\"broadcastedAt\":\"" + broadcastedAt + "\"";
         if (alertKind.length() > 0) {
@@ -276,8 +383,11 @@ class WriteCallbacks : public NimBLECharacteristicCallbacks {
         logEvent("DELIVER", "messageId=" + messageId +
                            " destination=" + destination +
                            " target=" + String(target));
-        if (destination == "community" || target != 0xffff) {
-          notifyFrame(eventType, 0, event, target);
+        if (destination == "community" || destination == "direct" ||
+            target != 0xffff) {
+          // Relay every event to all subscribed phones. Each app accepts
+          // community events and filters direct events by its own ID.
+          notifyFrame(eventType, 0, event, BLE_HS_CONN_HANDLE_NONE);
         } else {
           notifyFrame(4, sequence, "{\"message\":\"Participant unavailable\"}",
                       connId);
@@ -350,11 +460,8 @@ class ServerCallbacks : public NimBLEServerCallbacks {
         break;
       }
     }
-    if (connectedClients == 0) {
-      participantCount = 0;
-      logEvent("ROSTER_CLEARED", "last client disconnected");
-      notifyRoster();
-    }
+    const bool participantRemoved = removeParticipantByConnection(connId);
+    if (participantRemoved) notifyRoster();
     server->startAdvertising();
   }
 };
@@ -374,8 +481,11 @@ void setup() {
   notifyCharacteristic = service->createCharacteristic(
       NOTIFY_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
   notifyCharacteristic->setCallbacks(new NotifyCallbacks());
+  messagesCharacteristic = service->createCharacteristic(
+      MESSAGES_UUID, NIMBLE_PROPERTY::READ);
   service->start();
   updateRosterValue();
+  updateMessagesValue();
   NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
   advertising->setScanFilter(false, false);
   advertising->addServiceUUID(SERVICE_UUID);

@@ -16,9 +16,11 @@ class UniversalBleNodeTransport implements NodeTransport {
   BleCharacteristic? _notifyCharacteristic;
   StreamSubscription<Uint8List>? _notifications;
   final _reassembler = ProtocolReassembler();
+  final _simpleNotificationBuffer = StringBuffer();
   final _pending = <int, Completer<ProtocolFrame>>{};
   int _sequence = 0;
-  final _participantUpdates = StreamController<List<MeshParticipant>>.broadcast();
+  final _participantUpdates =
+      StreamController<List<MeshParticipant>>.broadcast();
   final _events = StreamController<MeshTransportEvent>.broadcast();
   List<MeshParticipant> _participants = const [];
   Timer? _participantHeartbeat;
@@ -113,6 +115,8 @@ class UniversalBleNodeTransport implements NodeTransport {
       protocolNotifyUuid,
       service: protocolServiceUuid,
     );
+    // The history characteristic is read on demand; it does not need a
+    // notification subscription.
     await notifyCharacteristic.notifications.subscribe();
     _device = device;
     _writeCharacteristic = writeCharacteristic;
@@ -179,9 +183,9 @@ class UniversalBleNodeTransport implements NodeTransport {
 
   Future<void> _writeFrame(
     Uint8List frame,
-    BleCharacteristic characteristic,
-    {bool withResponse = true}
-  ) {
+    BleCharacteristic characteristic, {
+    bool withResponse = true,
+  }) {
     final previous = _writeTail;
     final gate = Completer<void>();
     _writeTail = gate.future;
@@ -189,11 +193,7 @@ class UniversalBleNodeTransport implements NodeTransport {
       await previous;
       try {
         for (final chunk in const ProtocolChunker().split(frame)) {
-          await _writeChunk(
-            characteristic,
-            chunk,
-            withResponse: withResponse,
-          );
+          await _writeChunk(characteristic, chunk, withResponse: withResponse);
           // Android may report WRITE_REQUEST_BUSY if the next ATT write is
           // submitted before the previous request has cleared.
           await Future<void>.delayed(const Duration(milliseconds: 25));
@@ -206,9 +206,9 @@ class UniversalBleNodeTransport implements NodeTransport {
 
   Future<void> _writeChunk(
     BleCharacteristic characteristic,
-    Uint8List chunk,
-    {required bool withResponse}
-  ) async {
+    Uint8List chunk, {
+    required bool withResponse,
+  }) async {
     const maxAttempts = 4;
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -216,7 +216,8 @@ class UniversalBleNodeTransport implements NodeTransport {
         return;
       } catch (error) {
         final text = error.toString().toUpperCase();
-        final busy = text.contains('WRITE_REQUEST_BUSY') ||
+        final busy =
+            text.contains('WRITE_REQUEST_BUSY') ||
             text.contains('REQUEST_BUSY');
         if (!busy || attempt == maxAttempts) rethrow;
         await Future<void>.delayed(Duration(milliseconds: 50 * attempt));
@@ -232,15 +233,47 @@ class UniversalBleNodeTransport implements NodeTransport {
     await _readRoster();
   }
 
+  @override
+  Future<List<MeshTransportEvent>> refreshMessages() async {
+    if (_device == null) {
+      throw StateError('Connect a BLE node before refreshing messages.');
+    }
+    final device = _device!;
+    final characteristic = await device.getCharacteristic(
+      protocolMessagesUuid,
+      service: protocolServiceUuid,
+    );
+    final bytes = await characteristic.read(
+      timeout: const Duration(seconds: 5),
+    );
+    final decoded = jsonDecode(utf8.decode(bytes));
+    if (decoded is! List) {
+      throw const FormatException('ESP32 returned an invalid message history.');
+    }
+    return _decodeHistory(decoded);
+  }
+
+  List<MeshTransportEvent> _decodeHistory(List value) {
+    return value
+        .whereType<Map>()
+        .map((value) => _decodeEvent(value.cast<String, Object?>()))
+        .whereType<MeshTransportEvent>()
+        .toList();
+  }
+
   Future<void> _readRoster() async {
     final characteristic = _notifyCharacteristic;
     if (characteristic == null) {
       throw StateError('Connect a BLE node before refreshing participants.');
     }
-    final bytes = await characteristic.read(timeout: const Duration(seconds: 5));
+    final bytes = await characteristic.read(
+      timeout: const Duration(seconds: 5),
+    );
     final decoded = jsonDecode(utf8.decode(bytes));
     if (decoded is! Map || decoded['participants'] is! List) {
-      throw const FormatException('ESP32 returned an invalid participant roster.');
+      throw const FormatException(
+        'ESP32 returned an invalid participant roster.',
+      );
     }
     final payload = <String, Object?>{
       for (final entry in decoded.entries) entry.key.toString(): entry.value,
@@ -259,40 +292,64 @@ class UniversalBleNodeTransport implements NodeTransport {
       throw StateError('Connect a BLE node before sending.');
     }
     final sequence = ++_sequence;
-    final messageId = '${_participant.id}-$sequence-${DateTime.now().microsecondsSinceEpoch}';
-    final frame = sendTextFrame(
-      sequence: sequence,
+    final messageId =
+        '${_participant.id}-$sequence-${DateTime.now().microsecondsSinceEpoch}';
+    final payload = <String, Object?>{
+      'command': 'message',
+      'messageId': messageId,
+      'destination': destination == 'community' ? 'community' : 'direct',
+      'body': body,
+      'senderId': _participant.id,
+      'senderName': _participant.name,
+      'broadcastedAt': DateTime.now().toUtc().toIso8601String(),
+      if (alertKind != null) 'alertKind': alertKind.name,
+    };
+    await _writeJsonLine(payload, _writeCharacteristic!, withResponse: false);
+    return MeshMessage(
+      id: messageId,
       destination: destination,
       body: body,
+      state: DeliveryState.acceptedByNode,
+      createdAt: DateTime.now(),
       senderId: _participant.id,
-      messageId: messageId,
-      broadcastedAt: DateTime.now().toUtc().toIso8601String(),
+      senderName: _participant.name,
       alertKind: alertKind,
     );
-    final response = Completer<ProtocolFrame>();
-    _pending[sequence] = response;
-    try {
-      await _writeFrame(MeshProtocolCodec.encode(frame), _writeCharacteristic!);
-      final received = await response.future.timeout(const Duration(seconds: 10));
-      if (received.type == ProtocolFrameType.error) {
-        throw StateError(
-          received.payload['message'] as String? ?? 'Node rejected message.',
-        );
-      }
-      return MeshMessage(
-        id: received.payload['id'] as String? ?? messageId,
-        destination: destination,
-        body: body,
-        state: DeliveryState.acceptedByNode,
-        createdAt: DateTime.now(),
-        alertKind: alertKind,
-      );
-    } finally {
-      _pending.remove(sequence);
-    }
+  }
+
+  Future<void> _writeJsonLine(
+    Map<String, Object?> payload,
+    BleCharacteristic characteristic, {
+    required bool withResponse,
+  }) async {
+    final bytes = Uint8List.fromList(utf8.encode('${jsonEncode(payload)}\n'));
+    await _writeFrame(bytes, characteristic, withResponse: withResponse);
   }
 
   void _handleChunk(Uint8List chunk) {
+    final text = utf8.decode(chunk, allowMalformed: true);
+    if (_simpleNotificationBuffer.isNotEmpty ||
+        (chunk.isNotEmpty && chunk.first == 0x7b)) {
+      _simpleNotificationBuffer.write(text);
+      final bufferedText = _simpleNotificationBuffer.toString();
+      final lineEnd = bufferedText.indexOf('\n');
+      if (lineEnd < 0) return;
+      _simpleNotificationBuffer.clear();
+      final line = bufferedText.substring(0, lineEnd);
+      final remainder = bufferedText.substring(lineEnd + 1);
+      if (remainder.isNotEmpty) _simpleNotificationBuffer.write(remainder);
+      try {
+        final value = jsonDecode(line);
+        if (value is Map) {
+          final event = _decodeEvent(value.cast<String, Object?>());
+          if (event != null) _events.add(event);
+        }
+      } on FormatException {
+        // Ignore malformed simple notifications; framed protocol handling
+        // remains available for identity and presence messages.
+      }
+      return;
+    }
     final bytes = _reassembler.add(chunk);
     if (bytes == null) return;
     final frame = MeshProtocolCodec.decode(bytes);
@@ -319,6 +376,7 @@ class UniversalBleNodeTransport implements NodeTransport {
         );
       }
     }
+
     if (frame.type == ProtocolFrameType.participantRoster) {
       _participants = _decodeParticipants(frame.payload);
       _participantUpdates.add(_participants);
@@ -336,45 +394,54 @@ class UniversalBleNodeTransport implements NodeTransport {
 
   MeshTransportEvent? _decodeEvent(Map<String, Object?> payload) {
     final messageId = payload['messageId'];
-      final senderId = payload['senderId'];
-      final destination = payload['destination'];
-      final body = payload['body'];
-      final timestamp = payload['broadcastedAt'];
-      if (messageId is! String ||
-          senderId is! String ||
-          destination is! String ||
-          body is! String ||
-          timestamp is! String) {
+    final senderId = payload['senderId'];
+    final senderName = payload['senderName'];
+    final destination = payload['destination'];
+    final body = payload['body'];
+    final timestamp = payload['broadcastedAt'];
+    if (messageId is! String ||
+        senderId is! String ||
+        senderName is! String ||
+        destination is! String ||
+        body is! String ||
+        timestamp is! String) {
       return null;
     }
     final broadcastedAt = DateTime.tryParse(timestamp);
     if (broadcastedAt == null) return null;
     final kind = payload['alertKind'];
     return MeshTransportEvent(
-        messageId: messageId,
-        senderId: senderId,
-        destination: destination,
-        body: body,
-        broadcastedAt: broadcastedAt,
-        alertKind: kind is String
-            ? AlertKind.values.where((value) => value.name == kind).firstOrNull
-            : null,
+      messageId: messageId,
+      senderId: senderId,
+      senderName: senderName,
+      destination: destination,
+      body: body,
+      broadcastedAt: broadcastedAt,
+      alertKind: kind is String
+          ? AlertKind.values.where((value) => value.name == kind).firstOrNull
+          : null,
     );
   }
 
   List<MeshParticipant> _decodeParticipants(Map<String, Object?> payload) {
     final value = payload['participants'];
     if (value is! List) return const [];
-    return value.whereType<Map>().map((entry) {
-      final id = entry['id'];
-      final name = entry['name'];
-      final lastHeard = entry['lastHeard'];
-      return MeshParticipant(
-        id: id is String ? id : 'unknown',
-        name: name is String ? name : 'Unknown participant',
-        connected: entry['connected'] != false,
-        lastHeard: lastHeard is String ? DateTime.tryParse(lastHeard) : null,
-      );
-    }).where((participant) => participant.id != 'unknown').toList();
+    return value
+        .whereType<Map>()
+        .map((entry) {
+          final id = entry['id'];
+          final name = entry['name'];
+          final lastHeard = entry['lastHeard'];
+          return MeshParticipant(
+            id: id is String ? id : 'unknown',
+            name: name is String ? name : 'Unknown participant',
+            connected: entry['connected'] != false,
+            lastHeard: lastHeard is String
+                ? DateTime.tryParse(lastHeard)
+                : null,
+          );
+        })
+        .where((participant) => participant.id != 'unknown')
+        .toList();
   }
 }

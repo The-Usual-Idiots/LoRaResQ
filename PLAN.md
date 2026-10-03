@@ -35,6 +35,15 @@ This phase is complete only when both phones show the same two IDs after the
 second registration and the ESP32 serial monitor shows the registration,
 deduplication, and roster-update events.
 
+## Current messaging focus
+
+- `community` messages are delivered to every connected phone.
+- Direct messages are relayed over BLE to every client, then accepted only by
+  the selected participant and rejected by other apps.
+- Every message shows a community/direct badge, sender, and sent timestamp.
+- The ESP32 remains a simple relay and does not encrypt or transform message
+  content.
+
 LoRaResQ belongs to the same family as [Meshtastic](https://meshtastic.org/): both use low-power LoRa radios to form an off-grid, decentralised mesh. It is not a new radio invention, nor a replacement for Meshtastic. Its purpose is to focus the proven LoRa-mesh model on a rural rescue and resilience workflow: local-language alerts, clear delivery status, safe radio defaults, inexpensive node roles and a deployment playbook for a school, panchayat, farm collective or volunteer group.
 
 This document distinguishes between what the team will **demonstrate in the prototype** and what is a later **deployment direction**. That keeps the project credible and avoids promising a public-safety system before it has been tested and certified.

@@ -70,7 +70,6 @@ class MessageStore {
     } on FormatException {
       return [];
     }
-
   }
 
   Future<void> writeMessages(Iterable<MeshMessage> messages) async {
@@ -85,24 +84,28 @@ class MessageStore {
       body: value['body'] as String,
       state: DeliveryState.values.byName(value['state'] as String),
       createdAt: DateTime.parse(value['createdAt'] as String),
+      senderId: value['senderId'] as String? ?? 'unknown',
+      senderName: value['senderName'] as String? ?? 'Unknown sender',
       alertKind: value['alertKind'] == null
           ? null
           : AlertKind.values.byName(value['alertKind'] as String),
       broadcastedAt: value['broadcastedAt'] == null
-        ? null
-        : DateTime.tryParse(value['broadcastedAt'] as String),
+          ? null
+          : DateTime.tryParse(value['broadcastedAt'] as String),
     );
   }
 
   Map<String, Object?> _encode(MeshMessage message) => {
-        'id': message.id,
-        'destination': message.destination,
-        'body': message.body,
-        'state': message.state.name,
-        'createdAt': message.createdAt.toIso8601String(),
-        'alertKind': message.alertKind?.name,
-        'broadcastedAt': message.broadcastedAt?.toIso8601String(),
-      };
+    'id': message.id,
+    'destination': message.destination,
+    'body': message.body,
+    'state': message.state.name,
+    'createdAt': message.createdAt.toIso8601String(),
+    'senderId': message.senderId,
+    'senderName': message.senderName,
+    'alertKind': message.alertKind?.name,
+    'broadcastedAt': message.broadcastedAt?.toIso8601String(),
+  };
 }
 
 class NodeStore {
@@ -128,7 +131,6 @@ class NodeStore {
     } on TypeError {
       return null;
     }
-
   }
 
   Future<void> writeNode(MeshNode node) async {
@@ -166,7 +168,10 @@ class IdentityStore {
         !existing.startsWith('android-')) {
       return MeshParticipant(id: existing, name: _deviceName(existing));
     }
-    final id = platformId ?? existing ?? 'device-${DateTime.now().microsecondsSinceEpoch}';
+    final id =
+        platformId ??
+        existing ??
+        'device-${DateTime.now().microsecondsSinceEpoch}';
     await _store.write(_identityKey, id);
     return MeshParticipant(id: id, name: _deviceName(id));
   }
