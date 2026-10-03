@@ -36,6 +36,7 @@ abstract interface class NodeTransport {
   Future<void> setParticipantIdentity(MeshParticipant participant);
   Future<void> disconnect();
   Future<List<MeshParticipant>> connectedParticipants();
+  Future<void> refreshParticipants();
   Future<MeshMessage> send({
     required String destination,
     required String body,
@@ -99,6 +100,9 @@ class DemoNodeTransport implements NodeTransport {
       ),
     ];
   }
+
+  @override
+  Future<void> refreshParticipants() async {}
 
   @override
   Future<MeshMessage> send({

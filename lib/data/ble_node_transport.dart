@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:universal_ble/universal_ble.dart';
@@ -69,15 +70,22 @@ class UniversalBleNodeTransport implements NodeTransport {
     }
     final devices = <String, BleDevice>{};
     final subscription = UniversalBle.scanStream.listen((device) {
-      if (device.name?.startsWith('LoRaResQ') ?? false) {
+      final advertisedName = device.name ?? device.rawName ?? '';
+      final advertisesNodeService = device.services.any(
+        (service) => service.toLowerCase() == protocolServiceUuid,
+      );
+      // Nothing OS can omit the local name from scan results. The service UUID
+      // is the reliable fallback and avoids depending on Android's name cache.
+      if (advertisedName.startsWith('LoRaResQ') || advertisesNodeService) {
         devices[device.deviceId] = device;
       }
     });
     try {
-      await UniversalBle.startScan(
-        scanFilter: ScanFilter(withServices: [protocolServiceUuid]),
-      );
-      await Future<void>.delayed(const Duration(seconds: 4));
+      // Some Android BLE stacks omit advertised service UUIDs from scan
+      // results while another client is already connected. Filter by the
+      // stable node name instead so the second phone can still discover it.
+      await UniversalBle.startScan();
+      await Future<void>.delayed(const Duration(seconds: 8));
     } finally {
       await UniversalBle.stopScan();
       await subscription.cancel();
@@ -110,6 +118,7 @@ class UniversalBleNodeTransport implements NodeTransport {
     _writeCharacteristic = writeCharacteristic;
     _notifyCharacteristic = notifyCharacteristic;
     _notifications = notifyCharacteristic.onValueReceived.listen(_handleChunk);
+    _reassembler.clear();
     final hello = participantHelloFrame(
       sequence: ++_sequence,
       participantId: _participant.id,
@@ -120,22 +129,10 @@ class UniversalBleNodeTransport implements NodeTransport {
       writeCharacteristic,
       withResponse: false,
     );
-    // The node sends the initial roster to every subscribed client while
-    // handling HELLO. Give the ESP32 notification queue time to drain before
-    // submitting the next acknowledged ATT write, especially for client two.
+    // Read the plain roster value after registration. This avoids relying on
+    // notification ordering during reconnects.
     await Future<void>.delayed(const Duration(milliseconds: 500));
-    _rosterRequest = Timer(const Duration(seconds: 2), () {
-      final characteristic = _writeCharacteristic;
-      if (characteristic == null) return;
-      final frame = participantRosterRequestFrame(sequence: ++_sequence);
-      unawaited(
-        _writeFrame(
-          MeshProtocolCodec.encode(frame),
-          characteristic,
-          withResponse: false,
-        ),
-      );
-    });
+    await _readRoster();
     _participantHeartbeat = Timer.periodic(
       const Duration(seconds: 5),
       (_) => _sendParticipantHello(),
@@ -231,6 +228,28 @@ class UniversalBleNodeTransport implements NodeTransport {
   Future<List<MeshParticipant>> connectedParticipants() async => _participants;
 
   @override
+  Future<void> refreshParticipants() async {
+    await _readRoster();
+  }
+
+  Future<void> _readRoster() async {
+    final characteristic = _notifyCharacteristic;
+    if (characteristic == null) {
+      throw StateError('Connect a BLE node before refreshing participants.');
+    }
+    final bytes = await characteristic.read(timeout: const Duration(seconds: 5));
+    final decoded = jsonDecode(utf8.decode(bytes));
+    if (decoded is! Map || decoded['participants'] is! List) {
+      throw const FormatException('ESP32 returned an invalid participant roster.');
+    }
+    final payload = <String, Object?>{
+      for (final entry in decoded.entries) entry.key.toString(): entry.value,
+    };
+    _participants = _decodeParticipants(payload);
+    _participantUpdates.add(_participants);
+  }
+
+  @override
   Future<MeshMessage> send({
     required String destination,
     required String body,
@@ -280,10 +299,8 @@ class UniversalBleNodeTransport implements NodeTransport {
     if (frame.type == ProtocolFrameType.status &&
         frame.payload['state'] == 'participantAccepted') {
       final participants = _decodeParticipants(frame.payload);
-      if (participants.isNotEmpty) {
-        _participants = participants;
-        _participantUpdates.add(_participants);
-      }
+      _participants = participants;
+      _participantUpdates.add(_participants);
     }
     if (frame.type == ProtocolFrameType.participantPresenceProbe) {
       final characteristic = _writeCharacteristic;

@@ -27,6 +27,7 @@ class AppController extends ChangeNotifier {
   List<MeshParticipant> participants = const [];
   String? errorMessage;
   bool bluetoothOff = false;
+  bool refreshingParticipants = false;
   final List<MeshMessage> messages = [];
   final Map<String, MeshTransportEvent> _earlyEvents = {};
   StreamSubscription<List<MeshParticipant>>? _participantSubscription;
@@ -110,6 +111,21 @@ class AppController extends ChangeNotifier {
     participants = const [];
     connectionState = NodeConnectionState.disconnected;
     notifyListeners();
+  }
+
+  Future<void> refreshParticipants() async {
+    if (connectedNode == null || refreshingParticipants) return;
+    refreshingParticipants = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      await _transport.refreshParticipants();
+    } catch (error) {
+      errorMessage = error.toString();
+    } finally {
+      refreshingParticipants = false;
+      notifyListeners();
+    }
   }
 
   bool get communicationEnabled => connectedNode != null;

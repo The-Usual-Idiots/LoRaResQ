@@ -107,9 +107,10 @@ last BLE client disconnects and is not yet persisted across ESP32 reboot.
 Clients refresh their participant hello every five seconds. The bridge expires
 participants after 15 seconds without a hello, preventing disconnected apps
 from remaining in the roster indefinitely.
-After connecting, each app still explicitly requests a fresh roster as a
-recovery path in addition to announcing its identity. This is not required
-for the normal registration acknowledgement flow.
+The notify characteristic also exposes the current roster as a plain readable
+JSON value. After connecting, and whenever the user opens the roster, Flutter
+performs one direct GATT read of that value. This keeps roster retrieval
+independent from framed notification ordering and request timeouts.
 
 Every ten seconds, the node probes each participant in its table with a
 `PARTICIPANT_PRESENCE_PROBE`. A connected app answers with a sequence-matched

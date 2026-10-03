@@ -99,6 +99,8 @@ class ProtocolChunker {
 class ProtocolReassembler {
   final _bytes = <int>[];
 
+  void clear() => _bytes.clear();
+
   Uint8List? add(Uint8List chunk) {
     _bytes.addAll(chunk);
     if (_bytes.length < MeshProtocolCodec.headerLength) return null;

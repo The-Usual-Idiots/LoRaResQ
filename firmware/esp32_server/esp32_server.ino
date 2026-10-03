@@ -11,6 +11,7 @@ static const uint8_t PROTOCOL_VERSION = 1;
 static NimBLECharacteristic *notifyCharacteristic;
 static NimBLEServer *bleServer;
 static uint16_t connectedClients = 0;
+static const uint16_t MAX_CONNECTED_CLIENTS = 4;
 static const unsigned long PARTICIPANT_PROBE_INTERVAL_MS = 10000;
 static unsigned long lastParticipantProbe = 0;
 static uint16_t participantProbeSequence = 0;
@@ -76,12 +77,25 @@ String rosterJson() {
   return "{\"participants\":" + participantsJson() + "}";
 }
 
+void updateRosterValue() {
+  notifyCharacteristic->setValue(rosterJson());
+}
+
 void notifyRoster() {
   const String json = rosterJson();
+  updateRosterValue();
   logEvent("ROSTER_UPDATED", "participants=" + String(participantCount));
   for (size_t index = 0; index < participantCount; index++) {
     notifyFrame(6, 0, json, participants[index].connId);
   }
+}
+
+void notifyRosterTo(uint16_t connId, uint16_t sequence) {
+  const String json = rosterJson();
+  updateRosterValue();
+  logEvent("ROSTER_SENT", "conn=" + String(connId) +
+                            " participants=" + String(participantCount));
+  notifyFrame(6, sequence, json, connId);
 }
 
 bool rememberParticipant(const String &id, const String &name, uint16_t connId) {
@@ -103,7 +117,9 @@ bool rememberParticipant(const String &id, const String &name, uint16_t connId) 
   }
   if (participantCount >= 8) return false;
   participants[participantCount++] = {id, name, millis(), connId, 0};
-  logEvent("PARTICIPANT_STORED", "id=" + id + " name=" + name);
+  logEvent("PARTICIPANT_STORED", "id=" + id + " name=" + name +
+                                      " conn=" + String(connId));
+  logEvent("ROSTER_STATE", rosterJson());
   return true;
 }
 
@@ -284,8 +300,8 @@ class WriteCallbacks : public NimBLECharacteristicCallbacks {
         if (added) notifyRoster();
       } else if (type == 7) {
         logEvent("PARTICIPANT_ROSTER_REQUEST", "seq=" + String(sequence));
-        notifyRoster();
         notifyFrame(1, sequence, "{\"state\":\"rosterSent\"}", connId);
+        notifyRosterTo(connId, sequence);
       } else {
         logEvent("FRAME_IGNORED", "unsupported type=" + String(type));
       }
@@ -304,6 +320,17 @@ class NotifyCallbacks : public NimBLECharacteristicCallbacks {
 
 class ServerCallbacks : public NimBLEServerCallbacks {
   void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
+    if (connectedClients >= MAX_CONNECTED_CLIENTS) {
+      const uint16_t connId = connInfo.getConnHandle();
+      logEvent("NODE_FULL", "rejecting conn=" + String(connId));
+      notifyFrame(4, 0,
+                  "{\"message\":\"Node full: maximum 4 phones connected\"}",
+                  connId);
+      delay(100);
+      server->disconnect(connInfo);
+      server->startAdvertising();
+      return;
+    }
     connectedClients++;
     logEvent("BLE_CONNECTED", "clients=" + String(connectedClients) +
                                   " conn=" + String(connInfo.getConnHandle()));
@@ -345,9 +372,10 @@ void setup() {
       NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
   writeCharacteristic->setCallbacks(new WriteCallbacks());
   notifyCharacteristic = service->createCharacteristic(
-      NOTIFY_UUID, NIMBLE_PROPERTY::NOTIFY);
+      NOTIFY_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
   notifyCharacteristic->setCallbacks(new NotifyCallbacks());
   service->start();
+  updateRosterValue();
   NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
   advertising->setScanFilter(false, false);
   advertising->addServiceUUID(SERVICE_UUID);
@@ -356,6 +384,12 @@ void setup() {
 }
 
 void loop() {
+  NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
+  if (!advertising->isAdvertising()) {
+    advertising->setScanFilter(false, false);
+    NimBLEDevice::startAdvertising();
+    logEvent("ADVERTISING_RESTARTED", "watchdog");
+  }
   probeParticipants();
   delay(100);
 }

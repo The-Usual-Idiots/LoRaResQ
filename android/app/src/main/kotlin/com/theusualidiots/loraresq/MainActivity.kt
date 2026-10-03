@@ -1,4 +1,4 @@
-package com.theusualidiots.loraresq.loraresq
+package com.theusualidiots.loraresq
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -55,7 +55,7 @@ class MainActivity : FlutterActivity() {
                                 this,
                                 notificationChannelId
                             )
-                                .setSmallIcon(com.theusualidiots.loraresq.loraresq.R.mipmap.ic_launcher)
+                                .setSmallIcon(com.theusualidiots.loraresq.R.mipmap.ic_launcher)
                                 .setContentTitle(title)
                                 .setContentText(body)
                                 .setPriority(NotificationCompat.PRIORITY_HIGH)

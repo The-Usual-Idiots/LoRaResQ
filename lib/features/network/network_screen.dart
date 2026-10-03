@@ -41,13 +41,22 @@ class NetworkScreen extends StatelessWidget {
                   ),
                 )
               else if (controller.participants.isEmpty)
-                const Card(
+                Card(
                   child: ListTile(
-                    leading: Icon(Icons.sync),
-                    title: Text('Participant roster unavailable'),
-                    subtitle: Text(
-                      'This node has not reported other connected apps yet.',
+                    leading: controller.refreshingParticipants
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.sync),
+                    title: const Text('Participant roster unavailable'),
+                    subtitle: const Text(
+                      'Tap to request the latest table from the ESP32.',
                     ),
+                    onTap: controller.refreshingParticipants
+                        ? null
+                        : controller.refreshParticipants,
                   ),
                 )
               else
@@ -60,7 +69,7 @@ class NetworkScreen extends StatelessWidget {
                       title: Text(
                         participant.id == controller.localParticipant.id
                             ? '${participant.name} (This device)'
-                            : participant.name,
+                            : '${participant.name} (Other device)',
                       ),
                       subtitle: Text(
                         participant.lastHeard == null
