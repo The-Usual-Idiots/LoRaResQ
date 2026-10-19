@@ -402,16 +402,17 @@ LoRaResQ solves this through a layered reliability architecture:
 
 ```mermaid
 sequenceDiagram
-    participant S as "Node A (Originator)"
-    participant R as "Node B (Intermediate Relay)"
-    participant D as "Node C (Destination)"
+    autonumber
+    participant S as Node A Originator
+    participant R as Node B Relay
+    participant D as Node C Destination
 
     S->>R: Transmit LoRa Frame (MsgID 101, HopLimit 3, Dest C)
     Note over S: Stores frame in RAM buffer and starts Passive ACK Timer (650ms)
     Note over R: Verifies GCM Auth Tag and calculates SNR Jitter (120ms)
     R->>D: Forward LoRa Frame (MsgID 101, HopLimit 2, Dest C)
     Note over S: Node A overhears Node B forward (Passive ACK satisfied)
-    Note over D: Final destination reached; generates sequence-matched ACK
+    Note over D: Final destination reached and generates sequence-matched ACK
     D->>R: Transmit E2E ACK (AckFor 101, Dest A)
     R->>S: Forward E2E ACK (AckFor 101, Dest A)
     Note over S: Originator updates UI to Delivered
@@ -648,7 +649,7 @@ flowchart TD
     PURGE_PM --> PURGE_GM["Delete Global Chat older than 30 Days<br>(WHERE original_timestamp older than 30 days)"]
     PURGE_GM --> STALE_LOC["Flag Locations older than 1800s as is_stale = 1"]
     STALE_LOC --> COMMIT["COMMIT TRANSACTION"]
-    COMMIT --> VACUUM["Execute PRAGMA incremental_vacuum(20);<br>(Reclaims up to 20 KB free pages without locking bus)"]
+    COMMIT --> VACUUM["Execute PRAGMA incremental_vacuum(20)<br>(Reclaims up to 20 KB free pages without locking bus)"]
 ```
 
 | Record Type | Retention Policy | Purge Mechanism | Idempotent Safety Rule |
@@ -671,7 +672,7 @@ LoRaResQ implements a **Two-Tier Portal Separation Pattern**:
 ```mermaid
 sequenceDiagram
     participant Phone as Civilian Smartphone
-    participant AP as "ESP32 SoftAP (Port 53/80)"
+    participant AP as ESP32 SoftAP
     participant Browser as Mobile Safari / Chrome
 
     Phone->>AP: Connect to Wi-Fi SoftAP LoRaResQ-Alpha
@@ -706,7 +707,7 @@ sequenceDiagram
     participant User as Civilian User
     participant PWA as Next.js Web Console
     participant ESP as ESP32-S3 Node
-    participant Mesh as "LoRa Mesh (865 MHz)"
+    participant Mesh as LoRa Mesh 865MHz
 
     User->>PWA: Taps Broadcast SOS Button
     PWA->>PWA: Gathers latest coordinates and freshness check
