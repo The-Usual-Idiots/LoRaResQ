@@ -77,9 +77,9 @@ flowchart LR
         BrowserB["Next.js Web PWA<br><i>Mobile Chrome / Safari</i>"]
     end
 
-    BrowserA <===>|"Wi-Fi 2.4 GHz<br>(HTTP + WebSocket)"| AP1
-    Radio1 <===>|"Long-Range Sub-GHz LoRa<br>(865.125 MHz Mesh Link)"| Radio2
-    AP2 <===>|"Wi-Fi 2.4 GHz<br>(HTTP + WebSocket)"| BrowserB
+    BrowserA <-->|"Wi-Fi 2.4 GHz (HTTP and WebSocket)"| AP1
+    Radio1 <-->|"Long-Range Sub-GHz LoRa (865.125 MHz Mesh Link)"| Radio2
+    AP2 <-->|"Wi-Fi 2.4 GHz (HTTP and WebSocket)"| BrowserB
 ```
 
 ### 1.1 Operating Principle
@@ -113,15 +113,15 @@ flowchart TD
         Browser["Mobile Web Browser (Safari / Chrome)<br>Next.js PWA Single-Page App"]
     end
 
-    subgraph Tier2NodeGateway ["2. ESP32-S3 Node Gateway & Controller"]
+    subgraph Tier2NodeGateway ["2. ESP32-S3 Node Gateway and Controller"]
         AP["Wi-Fi SoftAP Service (802.11 b/g/n)"]
         DNS["Captive Portal DNS Resolver (Port 53 / RFC 8910)"]
         HTTP["Async Web Server Engine (Static PWA Assets)"]
         WS["WebSocket Stream Engine (/ws)"]
-        DISPATCH["Message Router & Dispatcher"]
-        PRESENCE["Presence & Lease Tracker"]
+        DISPATCH["Message Router and Dispatcher"]
+        PRESENCE["Presence and Lease Tracker"]
         CRYPTO["mbedTLS Hardware Crypto (AES-128-GCM)"]
-        MESH["Mesh Flooding & Deduplication Engine"]
+        MESH["Mesh Flooding and Deduplication Engine"]
         SQL["Embedded SQLite3 Engine (MicroSD SPI)"]
     end
 
@@ -137,11 +137,11 @@ flowchart TD
         RemoteNode2["Peer ESP32 Node C (Panchayat)"]
     end
 
-    Browser <-->|Wi-Fi 2.4 GHz (WPA2)| AP
+    Browser <-->|"Wi-Fi 2.4 GHz (WPA2)"| AP
     AP --> DNS
     DNS --> HTTP
     HTTP --> Browser
-    Browser <-->|Real-Time JSON Stream| WS
+    Browser <-->|"Real-Time JSON Stream"| WS
     WS <--> DISPATCH
     DISPATCH <--> PRESENCE
     DISPATCH <--> SQL
@@ -151,8 +151,8 @@ flowchart TD
     UART_SPI <--> MODEM
     MODEM <--> PA
     PA <--> ANT
-    ANT <===>|865.125 MHz LoRa Carrier| RemoteNode1
-    RemoteNode1 <===>|Multi-Hop LoRa Relay| RemoteNode2
+    ANT <-->|"865.125 MHz LoRa Carrier"| RemoteNode1
+    RemoteNode1 <-->|"Multi-Hop LoRa Relay"| RemoteNode2
 ```
 
 ---
@@ -197,48 +197,48 @@ The following sequence details the complete trajectory of an emergency message s
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Alice as Civilian A (Phone)
-    participant Node1 as ESP32 Node 1 (Local Gateway)
-    participant Node2 as ESP32 Node 2 (Intermediate Relay)
-    participant Node3 as ESP32 Node 3 (Destination Gateway)
-    actor Bob as Civilian B (Recipient)
+    actor Alice as Civilian A
+    participant Node1 as ESP32 Node 1
+    participant Node2 as ESP32 Node 2
+    participant Node3 as ESP32 Node 3
+    actor Bob as Civilian B
 
-    Note over Alice,Node1: Phase 1: Local Wi-Fi Association & PWA Ingestion
-    Alice->>Node1: Associates with Wi-Fi SoftAP (SSID: LoRaResQ-Node-01)
-    Node1-->>Alice: Captive Portal redirect; serves Next.js PWA static bundle
+    Note over Alice,Node1: Phase 1 - Local Wi-Fi Association and PWA Ingestion
+    Alice->>Node1: Associates with Wi-Fi SoftAP (SSID LoRaResQ-Node-01)
+    Node1-->>Alice: Captive Portal redirect and serves Next.js PWA bundle
     Alice->>Node1: Opens WebSocket (ws://192.168.4.1/ws)
-    Alice->>Node1: JSON Handshake: {device_uuid: "UUID-A", name: "Alice", model: "Pixel 7"}
-    Node1->>Node1: Commits Alice to SQLite users table (Status: 'connected')
+    Alice->>Node1: JSON Handshake with UUID-A, name Alice, model Pixel 7
+    Node1->>Node1: Commits Alice to SQLite users table (Status: connected)
 
-    Note over Alice,Node1: Phase 2: Message Composition & Dispatch
-    Alice->>Node1: WS Send: {recipient: "UUID-B", text: "Medical kit needed at Shelter 2", class: 0x01}
-    Node1->>Node1: Generates monotonic Message ID (0x00004A12)
-    Node1->>Node1: Commits to SQLite personal_messages (Status: 'pending')
-    Node1->>Node1: mbedTLS encrypts payload with AES-128-GCM + 16-byte Auth Tag
+    Note over Alice,Node1: Phase 2 - Message Composition and Dispatch
+    Alice->>Node1: WS Send Message to UUID-B: Medical kit needed at Shelter 2
+    Node1->>Node1: Generates monotonic Message ID 0x00004A12
+    Node1->>Node1: Commits to SQLite personal_messages (Status: pending)
+    Node1->>Node1: mbedTLS encrypts payload with AES-128-GCM and 16-byte Auth Tag
 
-    Note over Node1,Node2: Phase 3: Sub-GHz Hop 1 (Node 1 -> Node 2)
+    Note over Node1,Node2: Phase 3 - Sub-GHz Hop 1 (Node 1 to Node 2)
     Node1->>Node1: Radio CAD checks channel clear
-    Node1->>Node2: LoRa RF Packet TX (865.125 MHz, SF9, TTL=3, MsgID=0x00004A12)
+    Node1->>Node2: LoRa RF Packet TX (865.125 MHz, SF9, TTL 3, MsgID 0x00004A12)
     Node1->>Node1: Arm Hop Retransmission Timer (T_ack = 2500 ms)
 
-    Note over Node2,Node3: Phase 4: Relay Forwarding & Passive Overhearing (Hop 2)
+    Note over Node2,Node3: Phase 4 - Relay Forwarding and Passive Overhearing (Hop 2)
     Node2->>Node2: Checks 64-entry Ring Buffer: New Packet (Not duplicate)
     Node2->>Node2: Decrements Hop Limit: TTL = 2
     Node2->>Node2: Calculates SNR-weighted jitter backoff (T_jitter = 145 ms)
-    Node2->>Node3: LoRa RF Relay TX (TTL=2, MsgID=0x00004A12)
-    Node1-->>Node2: [Overhears Relay Transmission on 865.125 MHz]
+    Node2->>Node3: LoRa RF Relay TX (TTL 2, MsgID 0x00004A12)
+    Node1-->>Node2: Overhears Relay Transmission on 865.125 MHz (Passive ACK)
     Node1->>Node1: Passive ACK detected! Cancels Hop-1 Retransmission Timer
 
-    Note over Node3,Bob: Phase 5: Destination Ingestion & Delivery
+    Note over Node3,Bob: Phase 5 - Destination Ingestion and Delivery
     Node3->>Node3: Verifies 16-Byte Auth Tag via mbedTLS
-    Node3->>Node3: Decrypts payload; identifies Recipient = "UUID-B"
+    Node3->>Node3: Decrypts payload and identifies Recipient UUID-B
     alt Bob is currently connected to Node 3 Wi-Fi
         Node3->>Bob: Pushes JSON payload over active WebSocket
         Bob-->>Node3: Client WS Ack
         Node3->>Node1: Transmits End-to-End ACK Packet across mesh
-        Node1->>Alice: WebSocket push: Message DELIVERED (Double Checkmark in UI)
-    else Bob is currently offline / unconfirmed
-        Node3->>Node3: Inserts into SQLite personal_messages queue (Status: 'pending', 7-day TTL)
+        Node1->>Alice: WebSocket push: Message DELIVERED
+    else Bob is currently offline or unconfirmed
+        Node3->>Node3: Inserts into SQLite personal_messages queue (Status: pending, 7-day TTL)
         Note over Node3,Bob: When Bob connects to Node 3 within 7 days, queue flushes automatically
     end
 ```
@@ -327,12 +327,12 @@ Emergency mesh appliances must operate reliably on degraded battery reserves, ha
 
 ```mermaid
 flowchart LR
-    BATT["3.7V 1500 mAh LiPo Cell<br>(Model 523450)"] -->|Raw Li-Ion Power| TP["TP4056 USB-C Charger<br>(DW01 + 8205A Dual Protection)"]
-    TP -->|Protected OUT+ / OUT-| SW["Miniature Slide Switch<br>(Hard Power Cut)"]
-    SW -->|VIN+ / VIN-| BOOST["MT3608 DC-DC Step-Up Boost<br>(Calibrated to Strictly 5.00V DC)"]
+    BATT["3.7V 1500 mAh LiPo Cell<br>(Model 523450)"] -->|"Raw Li-Ion Power"| TP["TP4056 USB-C Charger<br>(DW01 + 8205A Dual Protection)"]
+    TP -->|"Protected OUT+ / OUT-"| SW["Miniature Slide Switch<br>(Hard Power Cut)"]
+    SW -->|"VIN+ / VIN-"| BOOST["MT3608 DC-DC Step-Up Boost<br>(Calibrated to Strictly 5.00V DC)"]
     
-    subgraph Regulated 5.0V System Rail
-        BOOST -->|5.00V DC Output| RAIL["5.0V Main System Bus"]
+    subgraph SystemRail ["Regulated 5.0V System Rail"]
+        BOOST -->|"5.00V DC Output"| RAIL["5.0V Main System Bus"]
         CAP["Bulk Decoupling Buffer<br>470 µF Low-ESR + 100 nF Ceramic"] --- RAIL
         RAIL --> ESP["ESP32-S3 (5V / VIN Pin)"]
         RAIL --> E22["EBYTE E22 Radio (VCC Pin)"]
@@ -402,19 +402,19 @@ LoRaResQ solves this through a layered reliability architecture:
 
 ```mermaid
 sequenceDiagram
-    participant S as Node A (Originator)
-    participant R as Node B (Intermediate Relay)
-    participant D as Node C (Destination)
+    participant S as "Node A (Originator)"
+    participant R as "Node B (Intermediate Relay)"
+    participant D as "Node C (Destination)"
 
-    S->>R: Transmit LoRa Frame [MsgID=101, HopLimit=3, Dest=C]
-    Note over S: Stores frame in RAM buffer<br/>Starts Passive ACK Timer (650ms)
-    Note over R: Verifies GCM Auth Tag<br/>Calculates SNR Jitter (120ms)
-    R->>D: Forward LoRa Frame [MsgID=101, HopLimit=2, Dest=C]
-    Note over S: Node A overhears Node B's forward!<br/>Passive ACK satisfied (zero-overhead)
-    Note over D: Final destination reached.<br/>Generates sequence-matched ACK
-    D->>R: Transmit E2E ACK [AckFor=101, Dest=A]
-    R->>S: Forward E2E ACK [AckFor=101, Dest=A]
-    Note over S: Originator updates UI to "Delivered / Acknowledged"
+    S->>R: Transmit LoRa Frame (MsgID 101, HopLimit 3, Dest C)
+    Note over S: Stores frame in RAM buffer and starts Passive ACK Timer (650ms)
+    Note over R: Verifies GCM Auth Tag and calculates SNR Jitter (120ms)
+    R->>D: Forward LoRa Frame (MsgID 101, HopLimit 2, Dest C)
+    Note over S: Node A overhears Node B forward (Passive ACK satisfied)
+    Note over D: Final destination reached; generates sequence-matched ACK
+    D->>R: Transmit E2E ACK (AckFor 101, Dest A)
+    R->>S: Forward E2E ACK (AckFor 101, Dest A)
+    Note over S: Originator updates UI to Delivered
 ```
 
 1. **Hop-by-Hop Reliability via Passive Overhearing (Passive ACK):**
@@ -467,29 +467,29 @@ flowchart TD
 
         subgraph PHYPre ["1. Hardware PHY Layer (Semtech SX1262)"]
             direction LR
-            P1["Preamble<br><i>8–12 Programmable Chirps</i>"] --- P2["Sync Word<br><code>0x1424</code> (Private Network)"]
-            P2 --- P3["Hardware Header<br><i>Payload Length + Coding Rate</i>"]
+            P1["Preamble<br>8–12 Programmable Chirps"] --- P2["Sync Word<br>0x1424 (Private Network)"]
+            P2 --- P3["Hardware Header<br>Payload Length and Coding Rate"]
         end
 
         subgraph Header14 ["2. Fixed Transport Header (Bytes 0–13: 14 Bytes Unencrypted)"]
             direction LR
-            H1["Byte 0<br><b>Magic Byte</b><br><code>0x52 ('R')</code>"] --> H2["Byte 1<br><b>Version</b><br><code>0x02</code>"]
-            H2 --> H3["Byte 2<br><b>Network ID</b><br><code>0x26</code>"]
-            H3 --> H4["Byte 3<br><b>Packet Class</b><br><code>0x01–0x05</code>"]
-            H4 --> H5["Bytes 4–7<br><b>Message ID</b><br><code>uint32 (4B)</code>"]
-            H5 --> H6["Bytes 8–9<br><b>Source Node</b><br><code>uint16 (2B)</code>"]
-            H6 --> H7["Bytes 10–11<br><b>Dest Node</b><br><code>uint16 (2B)</code>"]
-            H7 --> H8["Byte 12<br><b>Hop Limit / TTL</b><br><code>uint8 (1B)</code>"]
-            H8 --> H9["Byte 13<br><b>Payload Len N</b><br><code>uint8 (1B)</code>"]
+            H1["Byte 0<br><b>Magic Byte</b><br>0x52 ('R')"] --> H2["Byte 1<br><b>Version</b><br>0x02"]
+            H2 --> H3["Byte 2<br><b>Network ID</b><br>0x26"]
+            H3 --> H4["Byte 3<br><b>Packet Class</b><br>0x01–0x05"]
+            H4 --> H5["Bytes 4–7<br><b>Message ID</b><br>uint32 (4B)"]
+            H5 --> H6["Bytes 8–9<br><b>Source Node</b><br>uint16 (2B)"]
+            H6 --> H7["Bytes 10–11<br><b>Dest Node</b><br>uint16 (2B)"]
+            H7 --> H8["Byte 12<br><b>Hop Limit / TTL</b><br>uint8 (1B)"]
+            H8 --> H9["Byte 13<br><b>Payload Len N</b><br>uint8 (1B)"]
         end
 
         subgraph CiphertextPayload ["3. Authenticated Payload Ciphertext (Bytes 14 to 13+N: Variable N Bytes)"]
-            CP["<b>AES-128-GCM Encrypted Payload Data</b><br>• Sender Device UUID (16 Bytes) &nbsp;|&nbsp; • Recipient Device UUID (16 Bytes)<br>• Message Timestamp (8 Bytes Unix Epoch) &nbsp;|&nbsp; • User Payload Text or Location Fix (Up to 160 Bytes)"]
+            CP["<b>AES-128-GCM Encrypted Payload Data</b><br>• Sender Device UUID (16 Bytes)<br>• Recipient Device UUID (16 Bytes)<br>• Message Timestamp (8 Bytes Unix Epoch)<br>• User Payload Text or Location Fix (Up to 160 Bytes)"]
         end
 
-        subgraph CryptoTrailer ["4. Cryptographic Authentication & Integrity Trailer"]
+        subgraph CryptoTrailer ["4. Cryptographic Authentication and Integrity Trailer"]
             direction LR
-            T1["Bytes (14+N) to (29+N)<br><b>16-Byte AES-GCM / Poly1305 Tag</b><br><i>Guarantees Authenticity & Prevents Bit Tampering</i>"] --> T2["Hardware CRC-16 Trailer<br><b>SX1262 PHY Checksum</b><br><i>Drops Corrupted Over-The-Air Frames</i>"]
+            T1["Bytes (14+N) to (29+N)<br><b>16-Byte AES-GCM / Poly1305 Tag</b><br>Guarantees Authenticity and Prevents Tampering"] --> T2["Hardware CRC-16 Trailer<br><b>SX1262 PHY Checksum</b><br>Drops Corrupted Over-The-Air Frames"]
         end
 
         PHYPre --> Header14
@@ -517,23 +517,23 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[Packet Received from Radio UART/SPI] --> B{Magic == 'R' & NetID == 0x26?}
-    B -- No --> DROP1[Silently Drop Packet]
-    B -- Yes --> C{Message Key in 256-Entry Ring Cache?}
-    C -- Yes --> DROP2[Silently Drop Duplicate]
-    C -- No --> D[Record Key in Deduplication Cache]
-    D --> E{Verify 16-Byte GCM Auth Tag via mbedTLS}
-    E -- Failed --> DROP3[Log Security Tamper Event & Drop]
-    E -- Passed --> F[Decrypt Payload to RAM Buffer]
-    F --> G{Destination == ThisNode or 0xFFFF?}
-    G -- Yes --> H[Commit to SQLite & Push to WebSocket /ws]
-    H --> I{Requires ACK & Class != ACK?}
-    I -- Yes --> J[Transmit Sequence-Matched ACK Frame]
-    G -- No / Broadcast --> K{Hop Limit > 1?}
-    K -- Yes --> L[Decrement Hop Limit]
-    L --> M[Compute SNR-Weighted Jitter Backoff]
-    M --> N[Enqueue in FreeRTOS Relay Queue]
-    K -- No --> DROP4[Drop: Hop Limit Exhausted]
+    A["Packet Received from Radio UART/SPI"] --> B{"Magic == 'R' and NetID == 0x26?"}
+    B -- "No" --> DROP1["Silently Drop Packet"]
+    B -- "Yes" --> C{"Message Key in 256-Entry Ring Cache?"}
+    C -- "Yes" --> DROP2["Silently Drop Duplicate"]
+    C -- "No" --> D["Record Key in Deduplication Cache"]
+    D --> E{"Verify 16-Byte GCM Auth Tag via mbedTLS"}
+    E -- "Failed" --> DROP3["Log Security Tamper Event and Drop"]
+    E -- "Passed" --> F["Decrypt Payload to RAM Buffer"]
+    F --> G{"Destination == ThisNode or 0xFFFF?"}
+    G -- "Yes" --> H["Commit to SQLite and Push to WebSocket /ws"]
+    H --> I{"Requires ACK and Class != ACK?"}
+    I -- "Yes" --> J["Transmit Sequence-Matched ACK Frame"]
+    G -- "No or Broadcast" --> K{"Hop Limit > 1?"}
+    K -- "Yes" --> L["Decrement Hop Limit"]
+    L --> M["Compute SNR-Weighted Jitter Backoff"]
+    M --> N["Enqueue in FreeRTOS Relay Queue"]
+    K -- "No" --> DROP4["Drop: Hop Limit Exhausted"]
 ```
 
 ---
@@ -642,10 +642,10 @@ CREATE TABLE IF NOT EXISTS config_audit (
 ```mermaid
 flowchart TD
     WAKE["Hourly Maintenance Timer Fires (3600s)"] --> RTC{"Is System Time Authoritative?<br>(RTC synchronized via GPS/Mesh)"}
-    RTC -- No --> SKIP["Skip Retention Sweep (Prevents Accidental Purge)"]
-    RTC -- Yes --> BEGIN["BEGIN IMMEDIATE TRANSACTION"]
-    BEGIN --> PURGE_PM["Delete Personal Messages older than 7 Days<br>(WHERE original_timestamp < now - 604800)"]
-    PURGE_PM --> PURGE_GM["Delete Global Chat older than 30 Days<br>(WHERE original_timestamp < now - 2592000)"]
+    RTC -- "No" --> SKIP["Skip Retention Sweep (Prevents Accidental Purge)"]
+    RTC -- "Yes" --> BEGIN["BEGIN IMMEDIATE TRANSACTION"]
+    BEGIN --> PURGE_PM["Delete Personal Messages older than 7 Days<br>(WHERE original_timestamp older than 7 days)"]
+    PURGE_PM --> PURGE_GM["Delete Global Chat older than 30 Days<br>(WHERE original_timestamp older than 30 days)"]
     PURGE_GM --> STALE_LOC["Flag Locations older than 1800s as is_stale = 1"]
     STALE_LOC --> COMMIT["COMMIT TRANSACTION"]
     COMMIT --> VACUUM["Execute PRAGMA incremental_vacuum(20);<br>(Reclaims up to 20 KB free pages without locking bus)"]
@@ -671,17 +671,17 @@ LoRaResQ implements a **Two-Tier Portal Separation Pattern**:
 ```mermaid
 sequenceDiagram
     participant Phone as Civilian Smartphone
-    participant AP as ESP32 SoftAP (Port 53 / 80)
+    participant AP as "ESP32 SoftAP (Port 53/80)"
     participant Browser as Mobile Safari / Chrome
 
-    Phone->>AP: Connect to Wi-Fi SoftAP "LoRaResQ-Alpha"
+    Phone->>AP: Connect to Wi-Fi SoftAP LoRaResQ-Alpha
     AP-->>Phone: Assigns 192.168.4.X via DHCP (Option 114 provided)
-    Phone->>AP: OS probe (captive.apple.com / generate_204)
+    Phone->>AP: OS probe (generate_204)
     AP-->>Phone: Port 53 DNS redirects to 192.168.4.1
-    Phone->>Phone: Spawns OS Captive Assistant (WebSheet)
-    Note over Phone: TIER 1: Captive Splash Page<br/>Displays node status & immediate alert bulletin.<br/>Instructs user: Tap "Cancel" -> "Use Without Internet"
-    Phone->>Browser: Civilian opens full browser to http://192.168.4.1
-    Note over Browser: TIER 2: Full Next.js PWA Bootstraps<br/>Persistent IndexedDB storage active.<br/>Persistent WebSocket connection (/ws) established.
+    Phone->>Phone: Spawns OS Captive Assistant
+    Note over Phone: TIER 1 - Captive Splash Page<br>Displays node status and emergency alerts.<br>Instructs user to tap Use Without Internet
+    Phone->>Browser: Civilian opens full browser to 192.168.4.1
+    Note over Browser: TIER 2 - Full Next.js PWA Bootstraps<br>Persistent IndexedDB storage active.<br>Persistent WebSocket connection established.
 ```
 
 - **Tier 1 (Captive Splash):** Lightweight inline HTML (<15 KB) served by ESP32 RAM. Shows connected node name, battery, recent broadcast alerts, a high-contrast QR code, and explicit instructions to open Safari/Chrome.
@@ -706,16 +706,16 @@ sequenceDiagram
     participant User as Civilian User
     participant PWA as Next.js Web Console
     participant ESP as ESP32-S3 Node
-    participant Mesh as LoRa Mesh (865 MHz)
+    participant Mesh as "LoRa Mesh (865 MHz)"
 
-    User->>PWA: Taps "BROADCAST SOS TO ALL NODES"
-    PWA->>PWA: Gathers latest coordinates + freshness check
-    PWA->>ESP: WebSocket Send: {action: "send_sos", body: "...", coords: {...}}
+    User->>PWA: Taps Broadcast SOS Button
+    PWA->>PWA: Gathers latest coordinates and freshness check
+    PWA->>ESP: WebSocket Send emergency SOS payload with coordinates
     Note over ESP: Firmware escalates packet priority to CLASS_EMERGENCY
     ESP->>ESP: Preempts routine chatter queue
-    ESP->>ESP: Fires hardware buzzer (GPIO 2) & LED (GPIO 1)
+    ESP->>ESP: Triggers hardware buzzer and emergency LED
     ESP->>Mesh: Emits High-Priority Encrypted RF Packet (SF9)
-    Note over Mesh: Relayed immediately across all nodes;<br/>Sounds alarms on peer physical enclosures
+    Note over Mesh: Relayed across all nodes and sounds enclosure alarms
 ```
 
 1. **Location Freshness:** Every coordinates fix carries an `updatedAt` timestamp. If a fix is older than 15 minutes, the console badges it as **"Stale Fix"**, warning rescue coordinators that the victim may have moved.
