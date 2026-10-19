@@ -10,7 +10,7 @@ Each packet contains a network ID, stable source ID, message ID, destination,
 packet type, hop limit, creation/expiry timestamps and a bounded payload.
 Packets are UTF-8 JSON for simulator readability; the hardware implementation
 must replace this with the versioned, authenticated radio encoding described in
-`PLAN.md` before field use.
+`BLUEPRINT.md` before field use.
 
 `RadioMeshEngine` applies the controlled-flooding rules:
 
@@ -21,9 +21,11 @@ must replace this with the versioned, authenticated radio encoding described in
 - forward an eligible packet at most once with its hop limit decremented; and
 - stop forwarding when the hop limit reaches zero.
 
-## Run the test
+## Run the test (Archived in v1 branch)
 
 ```text
+# To execute this historical in-memory test harness, switch to branch v1:
+git checkout v1
 flutter test test/radio_mesh_test.dart
 ```
 
