@@ -51,17 +51,35 @@ LoRaResQ is an autonomous, decentralized communication appliance designed for ra
 
 The system is developed by **The Usual Idiots** student engineering team (**Tanishq Mudaliar**, **Hrshita Balakrishnan**, **Saivel Konar**, **Selvanavya Thevar**) under the mentorship of **Dr. Namrata Jiten Patel** for participation in *Anveshana* and national student innovation competitions.
 
-```
-                  +-------------------------------------------------------------+
-                  |                   LoRaResQ Operating Link                   |
-                  +-------------------------------------------------------------+
-                  
-   Civilian Smartphone                       ESP32-S3 Mesh Node 1                    ESP32-S3 Mesh Node 2                      Civilian Smartphone
-  +--------------------+                     +--------------------+                  +--------------------+                   +--------------------+
-  |  Next.js Web PWA   |                     | Wi-Fi AP + SQLite  |                  | Wi-Fi AP + SQLite  |                   |  Next.js Web PWA   |
-  | (Chrome / Safari)  | <=================> | EBYTE E22 (SX1262) | <==============> | EBYTE E22 (SX1262) | <===============> | (Chrome / Safari)  |
-  +--------------------+   Wi-Fi 2.4 GHz     +--------------------+   865 MHz LoRa   +--------------------+   Wi-Fi 2.4 GHz   +--------------------+
-     (Zero-Install)      (HTTP + WebSocket)       (Relief Camp)       (Multi-Hop RF)      (Remote Hamlet)  (HTTP + WebSocket)      (Zero-Install)
+```mermaid
+flowchart LR
+    subgraph ClientA ["Civilian Smartphone A (Zero-Install)"]
+        BrowserA["Next.js Web PWA<br><i>Mobile Chrome / Safari</i>"]
+    end
+
+    subgraph Node1 ["ESP32-S3 Mesh Node 1 (Relief Camp)"]
+        AP1["Wi-Fi SoftAP & Web Engine<br><i>192.168.4.1 / Port 53 DNS</i>"]
+        Storage1["SQLite 3 Database<br><i>MicroSD SPI / User Registry</i>"]
+        Radio1["EBYTE E22 (SX1262)<br><i>+22 dBm PA / 865.125 MHz</i>"]
+        AP1 <--> Storage1
+        AP1 <--> Radio1
+    end
+
+    subgraph Node2 ["ESP32-S3 Mesh Node 2 (Remote Hamlet)"]
+        Radio2["EBYTE E22 (SX1262)<br><i>+22 dBm PA / 865.125 MHz</i>"]
+        Storage2["SQLite 3 Database<br><i>MicroSD SPI / Store & Forward</i>"]
+        AP2["Wi-Fi SoftAP & Web Engine<br><i>192.168.4.1 / Port 53 DNS</i>"]
+        Radio2 <--> Storage2
+        Radio2 <--> AP2
+    end
+
+    subgraph ClientB ["Civilian Smartphone B (Zero-Install)"]
+        BrowserB["Next.js Web PWA<br><i>Mobile Chrome / Safari</i>"]
+    end
+
+    BrowserA <===>|"Wi-Fi 2.4 GHz<br>(HTTP + WebSocket)"| AP1
+    Radio1 <===>|"Long-Range Sub-GHz LoRa<br>(865.125 MHz Mesh Link)"| Radio2
+    AP2 <===>|"Wi-Fi 2.4 GHz<br>(HTTP + WebSocket)"| BrowserB
 ```
 
 ### 1.1 Operating Principle
@@ -79,7 +97,15 @@ The system is developed by **The Usual Idiots** student engineering team (**Tani
 
 # 2. End-to-End System Architecture
 
-The LoRaResQ architecture bridges local IP networking with long-range sub-gigahertz RF mesh communications without relying on cloud gateways, cellular backhaul, or internet dependencies:
+### 2.1 Architectural Motivation & Decoupling Philosophy
+
+In catastrophic disaster scenarios (e.g., severe cyclones, earthquakes, flash floods), terrestrial cellular base stations and fiber optic backhauls suffer instantaneous power failure or physical severance. Concurrently, civilian mobile devices become cut off from app stores, cloud authentication servers, and central databases. 
+
+LoRaResQ solves this through a **dual-tier bridging architecture** built on two fundamental physical realities:
+1. **Civilian smartphones lack Sub-GHz LoRa silicon** but possess ubiquitous 2.4 GHz 802.11 b/g/n Wi-Fi radios and modern web browsers.
+2. **Embedded LoRa transceivers lack user input/output interfaces** (screens, keyboards) but can transmit low-bandwidth packets across 5–15 kilometers of obstructed terrain without intermediate infrastructure.
+
+The ESP32-S3 acts as an autonomous edge gateway, converting standard local IP/Web transactions into robust, authenticated sub-GHz RF mesh packets without requiring cloud servers, cellular backhaul, or internet connectivity.
 
 ```mermaid
 flowchart TD
@@ -129,13 +155,110 @@ flowchart TD
     RemoteNode1 <===>|Multi-Hop LoRa Relay| RemoteNode2
 ```
 
-### Component Responsibilities:
-- **Phone / Client Device:** Connects to the local node Wi-Fi network, runs the browser-based PWA, captures user-entered text, manages local UUID identity, and transmits periodic location fixes.
-- **Next.js PWA:** Serves as the user-facing interface. Pre-rendered as static HTML/CSS/JS, cached in browser storage, connects over WebSockets (`ws://192.168.4.1/ws`), tracks message delivery states, and provides manual location entry when browser GPS is restricted.
-- **ESP32-S3 Controller:** Hosts the SoftAP, DNS captive portal, FreeRTOS background tasks, local SQLite database, presence leases, and cryptographic authenticated encryption.
-- **LoRa Radio (SX1262):** Provides the physical sub-GHz wireless link, executing Channel Activity Detection (CAD), packet modulation, and RF amplification across 865–868 MHz.
-- **MicroSD Card (FAT32 / SPI):** Hosts the SQLite database for the indefinite user registry, 7-day personal message queue, 30-day global chat log, and single latest location fix.
-- **Mesh Protocol:** Manages packet routing, deduplication caching, SNR-weighted jitter backoff, passive overhearing hop acknowledgements, and partition healing.
+---
+
+### 2.2 Deep Tier Breakdown & Component Responsibilities
+
+#### Tier 1 — The Client Layer (Civilian Smartphone / Laptop)
+- **Zero-Install Deployment:** Civilians connect to the local node's open Wi-Fi network without requiring prior downloads from Google Play or the Apple App Store.
+- **Next.js Progressive Web App (PWA):** Pre-rendered as static HTML5/CSS/JavaScript and served directly from ESP32 offline flash/MicroSD. Once opened, the browser caches the application shell, providing instant UI responsiveness.
+- **Stable Cryptographic Device Identity:** Generates an RFC 4122 compliant UUIDv4 stored within browser `localStorage` and `IndexedDB`. When a user roams between physical nodes, their identity remains continuous, preventing duplicate profiles.
+- **Real-Time Bidirectional Framing:** Bypasses sluggish HTTP polling by maintaining an event-driven WebSocket session (`ws://192.168.4.1/ws`) for instant messaging, live roster updates, and message delivery receipts.
+- **Adaptive Geolocation Ingestion:** Leverages device GPS when operating in secure browser environments; provides an offline landmark selector and interactive map pin-drop as fallbacks for non-secure HTTP contexts.
+
+#### Tier 2 — ESP32-S3 Node Gateway & Controller (The Edge Brain)
+- **Wi-Fi SoftAP Service:** Autonomous 802.11 b/g/n access point broadcasting on Channel 1 or 6, handling up to 16 concurrent associations per appliance.
+- **Captive Portal Engine:** Implements RFC 8910 (DHCP Option 114) and wildcard DNS interception on Port 53, smoothly launching the onboarding splash across iOS (CNA) and Android (CaptivePortalLogin).
+- **Embedded Web & WebSocket Server:** Lightweight asynchronous HTTP server serving static gzip-compressed Next.js assets; multiplexes JSON control frames across active client WebSockets.
+- **Message Router & Dispatcher:** Evaluates packet destination addresses. Messages targeting users on the local node are routed internally; messages for remote nodes are transformed into binary RF packets and handed to the radio pipeline.
+- **Presence & Lease Tracker:** Manages 45-second heartbeat leases for connected clients. Transitions unreachable users from `connected` $\to$ `offline` $\to$ `unconfirmed` without deleting registry history.
+- **Embedded SQLite 3 Storage Engine:** Executes on MicroSD via SPI. Enforces ACID guarantees, 7-day personal message expiration, 30-day global chat log pruning, and **strict 1-row location overwrites** (`ON CONFLICT(device_uuid) DO UPDATE`).
+- **mbedTLS Cryptographic Engine:** Leverages ESP32-S3 hardware accelerators to execute authenticated encryption (**AES-128-GCM**) with 16-byte Poly1305 authentication tags.
+- **Mesh Deduplication Engine:** Operates a 64-entry LRU ring buffer of packet hashes, preventing rebroadcast storms and broadcast loops.
+
+#### Tier 3 — Long-Range RF Transceiver (Semtech SX1262 / EBYTE E22)
+- **Sub-GHz Modulation (Chirp Spread Spectrum):** Modulates binary frames into linear frequency chirps centered at **865.125 MHz** (Channel 15, within India's G.S.R. 853(E) de-licensed band).
+- **Physical Link Profile:** Bandwidth = 125 kHz, Spreading Factor = SF9, Coding Rate = CR 4/5, yielding an exceptional $-130\text{ dBm}$ receiver sensitivity capable of penetrating heavy forest canopy and masonry rubble.
+- **Carrier Sense & Collision Avoidance:** Executes Channel Activity Detection (CAD) in $\approx 2 \times T_{sym}$, verifying the RF channel is clear prior to transmission.
+- **Power Amplification & Radiated Emission:** Generates $+22\text{ dBm}$ conducted power fed into a $+3\text{ dBi}$ whip antenna ($\approx +22.85\text{ dBm}$ ERP), maintaining an 8.15 dB safety margin below India's legal 1.0 Watt ERP ceiling.
+
+#### Tier 4 — Distributed Multi-Hop Mesh (Node-to-Node Backbone)
+- **Half-Duplex Operating Constraints:** LoRa transceivers cannot transmit and listen simultaneously. Traditional sliding-window (TCP) protocols fail due to receiver blindness and broadcast collision deadlocks.
+- **Stop-and-Wait with Passive Overhearing:** Relay nodes do not transmit dedicated hop acknowledgements. Instead, when Node 1 transmits a frame to Node 2, and Node 2 relays it forward to Node 3, Node 1 *overhears* Node 2's relay transmission on the shared channel, interpreting it as an implicit hop-level ACK.
+- **SNR-Weighted Randomized Jitter:** Intermediate nodes apply a backoff delay inversely proportional to link SNR ($T_{\text{jitter}} = T_{\text{base}} + (20 - \text{SNR}) \times 15\text{ ms} + \text{rand}(0, 80)\text{ ms}$), ensuring optimal relay paths fire first.
+- **Horizon Vector Anti-Entropy Sync:** Heals network partitions by exchanging 32-byte continuous sequence vectors during verified channel idle periods (throttled to 1 message every 8–10 seconds).
+
+---
+
+### 2.3 End-to-End Sequence Walkthrough: Lifecycle of an Emergency Message
+
+The following sequence details the complete trajectory of an emergency message sent from **Civilian A (Alice)** connected to **Node 1**, traversing an intermediate **Relay Node 2**, and reaching **Civilian B (Bob)** at **Node 3**:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Alice as Civilian A (Phone)
+    participant Node1 as ESP32 Node 1 (Local Gateway)
+    participant Node2 as ESP32 Node 2 (Intermediate Relay)
+    participant Node3 as ESP32 Node 3 (Destination Gateway)
+    actor Bob as Civilian B (Recipient)
+
+    Note over Alice,Node1: Phase 1: Local Wi-Fi Association & PWA Ingestion
+    Alice->>Node1: Associates with Wi-Fi SoftAP (SSID: LoRaResQ-Node-01)
+    Node1-->>Alice: Captive Portal redirect; serves Next.js PWA static bundle
+    Alice->>Node1: Opens WebSocket (ws://192.168.4.1/ws)
+    Alice->>Node1: JSON Handshake: {device_uuid: "UUID-A", name: "Alice", model: "Pixel 7"}
+    Node1->>Node1: Commits Alice to SQLite users table (Status: 'connected')
+
+    Note over Alice,Node1: Phase 2: Message Composition & Dispatch
+    Alice->>Node1: WS Send: {recipient: "UUID-B", text: "Medical kit needed at Shelter 2", class: 0x01}
+    Node1->>Node1: Generates monotonic Message ID (0x00004A12)
+    Node1->>Node1: Commits to SQLite personal_messages (Status: 'pending')
+    Node1->>Node1: mbedTLS encrypts payload with AES-128-GCM + 16-byte Auth Tag
+
+    Note over Node1,Node2: Phase 3: Sub-GHz Hop 1 (Node 1 -> Node 2)
+    Node1->>Node1: Radio CAD checks channel clear
+    Node1->>Node2: LoRa RF Packet TX (865.125 MHz, SF9, TTL=3, MsgID=0x00004A12)
+    Node1->>Node1: Arm Hop Retransmission Timer (T_ack = 2500 ms)
+
+    Note over Node2,Node3: Phase 4: Relay Forwarding & Passive Overhearing (Hop 2)
+    Node2->>Node2: Checks 64-entry Ring Buffer: New Packet (Not duplicate)
+    Node2->>Node2: Decrements Hop Limit: TTL = 2
+    Node2->>Node2: Calculates SNR-weighted jitter backoff (T_jitter = 145 ms)
+    Node2->>Node3: LoRa RF Relay TX (TTL=2, MsgID=0x00004A12)
+    Node1-->>Node2: [Overhears Relay Transmission on 865.125 MHz]
+    Node1->>Node1: Passive ACK detected! Cancels Hop-1 Retransmission Timer
+
+    Note over Node3,Bob: Phase 5: Destination Ingestion & Delivery
+    Node3->>Node3: Verifies 16-Byte Auth Tag via mbedTLS
+    Node3->>Node3: Decrypts payload; identifies Recipient = "UUID-B"
+    alt Bob is currently connected to Node 3 Wi-Fi
+        Node3->>Bob: Pushes JSON payload over active WebSocket
+        Bob-->>Node3: Client WS Ack
+        Node3->>Node1: Transmits End-to-End ACK Packet across mesh
+        Node1->>Alice: WebSocket push: Message DELIVERED (Double Checkmark in UI)
+    else Bob is currently offline / unconfirmed
+        Node3->>Node3: Inserts into SQLite personal_messages queue (Status: 'pending', 7-day TTL)
+        Note over Node3,Bob: When Bob connects to Node 3 within 7 days, queue flushes automatically
+    end
+```
+
+---
+
+### 2.4 Architectural Invariants & System Guarantees
+
+1. **Decoupled Failure Domains:**
+   - A client phone crashing, disconnecting, or closing its browser has zero impact on node operations or mesh routing.
+   - An RF collision or mesh network partition never blocks civilians connected to the same local node from communicating or viewing cached bulletins.
+2. **Deterministic Airtime Boundaries:**
+   - All over-the-air frames are strictly capped at 255 bytes physical payload. At SF9 / 125 kHz / CR 4/5, single-frame airtime is strictly bounded to $\approx 330\text{ ms}$.
+   - Node firmware enforces a hard $\le 1.0\%$ duty-cycle ceiling, guaranteeing fair spectrum access and preventing power depletion.
+3. **Eventual Consistency without Central Coordination:**
+   - The global chat log behaves as a monotonic Grow-Only Set (G-Set CRDT). Packets can arrive out of order, over multiple hops, or after partition recovery without conflicting or producing inconsistent chat state.
+4. **Strict Ephemeral Civilian Tracking Boundaries:**
+   - GPS coordinates are strictly overwritten in SQLite (`ON CONFLICT(device_uuid) DO UPDATE SET latitude=excluded.latitude...`), guaranteeing that historical movement tracks are never preserved or logged.
+5. **Zero Cloud / Internet Reliance:**
+   - Every system capability—from DNS resolution, web serving, and database persistence to cryptographic authentication and multi-hop routing—executes entirely on local silicon ($240\text{ MHz}$ ESP32-S3) and unlicensed sub-GHz spectrum.
 
 ---
 
@@ -145,21 +268,14 @@ flowchart TD
 
 The legal framework governing sub-GHz wireless transmissions in India is administered by the **Wireless Planning and Coordination (WPC) Wing** of the Ministry of Communications, Government of India.
 
-```
-+-------------------------------------------------------------------------------------------------------+
-|                                  Regional Sub-GHz Spectrum Comparison                                 |
-+--------------------------+-----------------------+-----------------------------+----------------------+
-| Parameter                | India (WPC SRD)       | Europe (ETSI EN 300 220)    | USA (FCC Part 15.247)|
-+--------------------------+-----------------------+-----------------------------+----------------------+
-| Governing Standard       | G.S.R. 853(E) (2021)  | ETSI EN 300 220-2           | FCC Title 47 Part 15 |
-|                          | G.S.R. 564(E) (2008)  |                             |                      |
-| De-Licensed Frequency    | **865.000 – 868.000** | 868.000 – 868.600 MHz       | 902.000 – 928.000 MHz|
-| Permitted Transmitter Pwr| **1.0 Watt (30 dBm)** | 25 mW (14 dBm) ERP          | 1.0 Watt (30 dBm)    |
-| Max Effective Rad. Power | **4.0 Watts ERP**     | 25 mW (14 dBm) ERP          | 4.0 Watts EIRP       |
-| Duty Cycle Restrictions  | Unrestricted / LBT    | **Strict 1.0%** (36s/hr)    | Unrestricted / FHSS  |
-| LoRaResQ Compliance      | **Fully Compliant**   | Incompatible Frequency      | Incompatible Hardware|
-+--------------------------+-----------------------+-----------------------------+----------------------+
-```
+| Parameter | India (WPC SRD) | Europe (ETSI EN 300 220) | USA (FCC Part 15.247) |
+|---|---|---|---|
+| **Governing Standard** | G.S.R. 853(E) (2021) / G.S.R. 564(E) (2008) | ETSI EN 300 220-2 | FCC Title 47 Part 15 |
+| **De-Licensed Frequency** | **865.000 – 868.000 MHz** | 868.000 – 868.600 MHz | 902.000 – 928.000 MHz |
+| **Permitted Transmitter Pwr** | **1.0 Watt (30 dBm)** | 25 mW (14 dBm) ERP | 1.0 Watt (30 dBm) |
+| **Max Effective Rad. Power** | **4.0 Watts ERP** | 25 mW (14 dBm) ERP | 4.0 Watts EIRP |
+| **Duty Cycle Restrictions** | Unrestricted / LBT | **Strict 1.0%** (36s/hr) | Unrestricted / FHSS |
+| **LoRaResQ Compliance** | **Fully Compliant** | Incompatible Frequency | Incompatible Hardware |
 
 #### Detailed Indian Regulatory Analysis:
 1. **Historic RFID Exemption — G.S.R. 564(E) (30 July 2008):**
@@ -344,23 +460,42 @@ flowchart TD
 
 All over-the-air packets use a compact, fixed binary header to maximize airtime efficiency:
 
-```
- 0                   1                   2                   3
- 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|   Magic 'R'   |  Version (2)  |  Net ID (0x26)|  Packet Class |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                          Message ID                           |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|       Source Node ID          |     Destination Node ID       |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-| Hop Limit/TTL | Payload Len N |  Encrypted Payload Ciphertext |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
-|                ... (N Bytes Authenticated Ciphertext)         |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|             16-Byte AES-128-GCM Authentication Tag            |
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```mermaid
+flowchart TD
+    subgraph PacketLayout ["LoRaResQ Physical Over-The-Air Packet Frame (Max 255 Bytes)"]
+        direction TB
+
+        subgraph PHYPre ["1. Hardware PHY Layer (Semtech SX1262)"]
+            direction LR
+            P1["Preamble<br><i>8–12 Programmable Chirps</i>"] --- P2["Sync Word<br><code>0x1424</code> (Private Network)"]
+            P2 --- P3["Hardware Header<br><i>Payload Length + Coding Rate</i>"]
+        end
+
+        subgraph Header14 ["2. Fixed Transport Header (Bytes 0–13: 14 Bytes Unencrypted)"]
+            direction LR
+            H1["Byte 0<br><b>Magic Byte</b><br><code>0x52 ('R')</code>"] --> H2["Byte 1<br><b>Version</b><br><code>0x02</code>"]
+            H2 --> H3["Byte 2<br><b>Network ID</b><br><code>0x26</code>"]
+            H3 --> H4["Byte 3<br><b>Packet Class</b><br><code>0x01–0x05</code>"]
+            H4 --> H5["Bytes 4–7<br><b>Message ID</b><br><code>uint32 (4B)</code>"]
+            H5 --> H6["Bytes 8–9<br><b>Source Node</b><br><code>uint16 (2B)</code>"]
+            H6 --> H7["Bytes 10–11<br><b>Dest Node</b><br><code>uint16 (2B)</code>"]
+            H7 --> H8["Byte 12<br><b>Hop Limit / TTL</b><br><code>uint8 (1B)</code>"]
+            H8 --> H9["Byte 13<br><b>Payload Len N</b><br><code>uint8 (1B)</code>"]
+        end
+
+        subgraph CiphertextPayload ["3. Authenticated Payload Ciphertext (Bytes 14 to 13+N: Variable N Bytes)"]
+            CP["<b>AES-128-GCM Encrypted Payload Data</b><br>• Sender Device UUID (16 Bytes) &nbsp;|&nbsp; • Recipient Device UUID (16 Bytes)<br>• Message Timestamp (8 Bytes Unix Epoch) &nbsp;|&nbsp; • User Payload Text or Location Fix (Up to 160 Bytes)"]
+        end
+
+        subgraph CryptoTrailer ["4. Cryptographic Authentication & Integrity Trailer"]
+            direction LR
+            T1["Bytes (14+N) to (29+N)<br><b>16-Byte AES-GCM / Poly1305 Tag</b><br><i>Guarantees Authenticity & Prevents Bit Tampering</i>"] --> T2["Hardware CRC-16 Trailer<br><b>SX1262 PHY Checksum</b><br><i>Drops Corrupted Over-The-Air Frames</i>"]
+        end
+
+        PHYPre --> Header14
+        Header14 --> CiphertextPayload
+        CiphertextPayload --> CryptoTrailer
+    end
 ```
 
 ### 7.1 Field Definitions
