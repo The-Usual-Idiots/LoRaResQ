@@ -97,7 +97,7 @@ flowchart LR
     PeerNode <===>|Multi-Hop LoRa| EndNode
 ```
 
-For complete electrical schematics, pinout matrices, packet layout diagrams, and state machines, refer to **[BLUEPRINT.md](BLUEPRINT.md)**.
+For complete electrical schematics, pinout matrices, packet layout diagrams, state machines, the **[Technical Glossary](BLUEPRINT.md#151-technical-glossary)**, and **[Academic References with Google Scholar links](BLUEPRINT.md#152-academic-references-direct-google-scholar-citations)**, refer to **[BLUEPRINT.md](BLUEPRINT.md)**.
 
 ---
 
