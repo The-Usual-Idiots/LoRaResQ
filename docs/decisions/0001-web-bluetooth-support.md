@@ -1,32 +1,25 @@
-# ADR 0001: Browser transport support
+# ADR 0001: Browser Transport Support via Web Bluetooth
 
-- **Status:** Accepted
-- **Date:** 2026-10-02
+- **Status:** **Superseded by ADR 0002 (Wi-Fi SoftAP Captive Portal)**
+- **Date:** 2026-10-02 (Superseded 2026-10-19)
 
-## Decision
+## Context (Historical v1.0)
 
-LoRaResQ web support will use Web Bluetooth when the browser exposes the required
-API and the page is running in a secure context. The app will detect capability
-before scanning and show an explicit unsupported-browser state when Web
-Bluetooth is unavailable.
+During initial proof-of-concept prototyping, Web Bluetooth was evaluated to connect browser clients to an ESP32 microcontroller without requiring intermediate network infrastructure.
 
-The web client will reuse the same node transport contract, protocol framing,
-delivery states and error wording as Android and Windows. It will not simulate a
-successful hardware connection in production or silently fall back to a
-different transport.
+## Superseded Decision
 
-## Rationale
+The original decision was to use the Web Bluetooth API (`navigator.bluetooth`) with a custom 128-bit GATT service UUID (`7f6c0001-6b52-4f5d-9a5e-4f6c6f726151`).
 
-Web Bluetooth allows the browser client to connect directly to a nearby ESP32
-without introducing a server or cloud dependency. Browser support and security
-requirements vary, so capability detection and honest failure states are
-necessary.
+## Rationale for Supersession (Why Web Bluetooth Was Abandoned)
 
-## Consequences
+Field evaluation and blueprint reconciliation identified four critical blockers that made Web Bluetooth unsuitable for an emergency disaster communication network:
 
-- Supported browsers require HTTPS (or localhost) and a user gesture to start
-  device selection.
-- Unsupported browsers can still render the app shell and explain how to use
-  Android or Windows, but cannot claim node connectivity.
-- A future browser-compatible bridge can be added behind the same transport
-  boundary without changing domain or feature code.
+1. **Lack of iOS Mobile Safari Support:** Apple's WebKit does not implement Web Bluetooth due to privacy and fingerprinting concerns. Because iOS represents a significant share of civilian smartphones, disaster victims with iPhones were completely excluded from the mesh unless they installed niche third-party browsers beforehand.
+2. **Strict Secure Context (HTTPS) Requirement:** The Web Bluetooth API is disabled by modern browsers unless served over a cryptographically verified HTTPS connection (`window.isSecureContext === true`). An off-grid, air-gapped ESP32 running in a flood zone cannot contact public Certificate Authorities (Let's Encrypt) to validate TLS certificates.
+3. **Friction-Heavy Manual Pairing:** Web Bluetooth requires active user interaction with a browser security modal to scan, select, and pair peripheral devices. In high-stress emergency evacuations, non-technical users struggle with Bluetooth pairing.
+4. **Airtime Inefficiency:** Bluetooth 2.4 GHz operates in the congested ISM band alongside Wi-Fi, suffering severe attenuation through wet foliage, floodwaters, and collapsed structural debris compared to sub-gigahertz LoRa (865 MHz).
+
+## Replacement Architecture
+
+See [ADR 0002: Wi-Fi SoftAP Captive Portal & WebSockets](file:///c:/Users/tanis/Documents/VSC%20Projects/The%20Usual%20Idiots/LoRaResQ/docs/decisions/0002-wifi-captive-portal-transport.md).

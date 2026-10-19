@@ -1,161 +1,120 @@
-# LoRaResQ BLE protocol v1
+# LoRaResQ Protocol Specification (v2.0)
 
-This protocol is the phone-to-ESP32 bridge used by the current hardware slice.
-It is intentionally separate from the later LoRa mesh packet format.
+> [!NOTE]
+> **Architectural Transition Notice:** The legacy Bluetooth Low Energy (BLE GATT) bridge specified in v1.0 has been **superseded** by the standalone **Wi-Fi SoftAP Captive Portal + WebSockets** architecture in accordance with `blueprint.md` v2.0. This eliminates browser incompatibility (especially iOS Mobile Safari) and the requirement for secure HTTPS contexts on air-gapped emergency hardware.
 
-## BLE service
+The LoRaResQ system utilizes a **two-tier protocol hierarchy**:
+1. **Tier 1 / Tier 2: Client-to-Node Local Bridge** (Wi-Fi SoftAP, HTTP Captive Portal, and WebSocket Frames)
+2. **Tier 3: Node-to-Node Over-The-Air LoRa Mesh Transport** (14-Byte Binary Packets with AES-128-GCM and Passive ACKs)
 
-| Item | UUID | Properties |
-|---|---|---|
-| Service | `7f6c0001-6b52-4f5d-9a5e-4f6c6f726151` | Primary |
-| Phone writes | `7f6c0002-6b52-4f5d-9a5e-4f6c6f726151` | Write |
-| Node notifies | `7f6c0003-6b52-4f5d-9a5e-4f6c6f726151` | Notify |
+---
 
-The node advertises as `LoRaResQ ESP32` and advertises the service UUID.
+## 1. Client-to-Node Local Bridge (Wi-Fi & WebSockets)
 
-## Frame
+Each LoRaResQ node functions as an autonomous Wi-Fi access point and local web server.
 
-All multi-byte integers are unsigned little-endian.
+### Network Configuration
+* **SSID:** `LoRaResQ-Alpha` (or node-configured callsign, e.g. `LoRaResQ-0x0001`)
+* **Security:** Open / Unencrypted (802.11 b/g/n, Channel 6) for instant civilian triage
+* **IPv4 Address:** `192.168.4.1` (Subnet: `255.255.255.0`)
+* **DNS Server (Port 53):** Wildcard DNS responder directing all queries to `192.168.4.1` (Captive Portal)
+* **HTTP Web Server (Port 80):** Serves Tier 1 Captive Splash (`<10 KB`) and statically exported Next.js 15 PWA
+* **WebSocket Server (Port 81):** Real-time bidirectional JSON frame multiplexer (`ws://192.168.4.1:81/ws`)
 
-| Offset | Size | Field |
-|---:|---:|---|
-| 0 | 1 | Magic `0x4c` (`L`) |
-| 1 | 1 | Magic `0x51` (`Q`) |
-| 2 | 1 | Protocol version, currently `1` |
-| 3 | 1 | Frame type |
-| 4 | 2 | Sequence number |
-| 6 | 2 | UTF-8 JSON payload length |
-| 8 | N | UTF-8 JSON payload |
+### WebSocket Frame Schema
 
-Current frame types:
+All WebSocket frames are serialized as UTF-8 JSON objects.
 
-| Value | Type | Direction |
-|---:|---|---|
-| 0 | `HELLO` | Node → phone |
-| 1 | `STATUS` / accepted response | Node → phone |
-| 2 | `SEND_TEXT` | Phone → node |
-| 3 | `MESSAGE_RECEIVED` | Node → phone |
-| 4 | `ERROR` | Node → phone |
-| 5 | `PARTICIPANT_HELLO` | Phone → node |
-| 6 | `PARTICIPANT_ROSTER` | Node → phone |
-| 7 | `PARTICIPANT_ROSTER_REQUEST` | Phone → node |
-| 8 | `MESSAGE_BROADCAST` | Node → all subscribed phones |
-| 9 | `ALERT_BROADCAST` | Node → all subscribed phones |
-| 10 | `PARTICIPANT_PRESENCE_PROBE` | Node → subscribed phones |
+#### A. Inbound Frames (Client → ESP32 / Simulator)
 
-`SEND_TEXT` payloads include `messageId`, `senderId`, `destination`, `body`,
-`broadcastedAt`, and optional `alertKind`. The ESP32 first responds with a
-sequence-matched accepted response, then emits an event. The ESP32 is a
-long-lived broker: phones keep their BLE connections open, send HELLO and
-heartbeats, and may receive roster or event frames without a preceding
-request.
+| Frame Type | Key Payload Fields | Description |
+| :--- | :--- | :--- |
+| `CLIENT_HELLO` | `deviceUuid`, `displayName`, `deviceModel` | Initial handshake registering civilian identity and lease with the node. |
+| `HEARTBEAT` | `deviceUuid` | Keepalive frame sent every 15 seconds to maintain client lease. |
+| `SEND_PERSONAL` | `messageId`, `recipientUuid`, `recipientName`, `body` | Transmits an encrypted 1:1 message (destined for local client or LoRa mesh). |
+| `SEND_GLOBAL` | `messageId`, `body`, `isEmergencyAlert` | Transmits a broadcast announcement to the mesh community feed. |
+| `SEND_SOS` | `messageId`, `body`, `location` | High-priority emergency broadcast preempting routine queue. |
+| `UPDATE_LOCATION` | `location: DeviceLocation` | Overwrites the client's latest registered GPS coordinates (1-row overwrite). |
+| `ADMIN_AUTH` | `password` | Authenticates administrative session (`admin123` by default). |
+| `UPDATE_CONFIG` | `token`, `config: NodeConfig` | Updates node runtime parameters (RF channel, TX power, SSID). |
 
-`destination` is either `community` or a participant ID. Community events are
-intended for every connected phone. The broker selects the destination participant and records it in the event.
-The Arduino BLE facade used by this firmware exposes one shared notification
-characteristic, so packets are fanned out at the BLE layer while the app
-enforces the destination filter and discards direct events addressed to
-another participant. A direct event from the local participant is not added to
-the sender's history. Apps use the message ID to change the sender's local
-community record to `Broadcasted` and to deduplicate incoming records.
+#### B. Outbound Frames (ESP32 / Simulator → Client)
 
-Payload is a bounded JSON object for this bridge slice. The message body is
-limited to 120 characters by the app and must be validated again by firmware.
-Unknown versions, malformed headers, mismatched lengths and oversized payloads
-must be rejected.
+| Frame Type | Key Payload Fields | Description |
+| :--- | :--- | :--- |
+| `NODE_HELLO` | `nodeInfo`, `roster`, `recentGlobal`, `queuedPersonal`, `isSimulated` | Initial state response carrying node health, connected peers, and recent messages. |
+| `HEARTBEAT_ACK` | `timestamp` | Acknowledges receipt of client heartbeat. |
+| `NEW_PERSONAL_MESSAGE` | `message: PersonalMessage` | Delivers an incoming 1:1 message to the recipient client. |
+| `NEW_GLOBAL_MESSAGE` | `message: GlobalMessage` | Pushes a received mesh broadcast announcement to the feed. |
+| `EMERGENCY_ALERT` | `alert: GlobalMessage` | Dispatches high-priority SOS alert (triggers local acoustic siren). |
+| `MESSAGE_STATUS_UPDATE` | `messageId`, `status`, `deliveredTimestamp` | Notifies sender of message delivery state (`pending` vs `delivered`). |
+| `ROSTER_UPDATE` | `roster: UserProfile[]` | Broadcasts refreshed civilian mesh peer registry. |
+| `ADMIN_AUTH_RESULT` | `success`, `token`, `error` | Reports result of administrative authentication attempt. |
 
-## BLE chunking
+---
 
-Frames are split into 20-byte chunks for the default ATT payload. The receiver
-reassembles chunks using the declared payload length. A notification may
-contain only one complete frame or the beginning/continuation of a frame.
+## 2. Node-to-Node Over-The-Air LoRa Protocol
 
-## Example
+Over-the-air communication between LoRa nodes operates on **865.125 MHz** (India SRD Channel 15) using an authenticated, packed binary framing format.
 
-`SEND_TEXT` payload:
+### Physical RF Parameters
+* **Transceiver:** Semtech SX1262 (EBYTE E22-900T22D module)
+* **Operating Frequency:** 865.125 MHz (Channel 15, GSR 564(E) license-exempt SRD band)
+* **Bandwidth (BW):** 125 kHz
+* **Spreading Factor (SF):** 9
+* **Coding Rate (CR):** 4/5
+* **Preamble Length:** 8 symbols
+* **Transmit Power:** 22 dBm (160 mW ERP max legal limit)
+* **Maximum PHY Packet Size:** 255 bytes
 
-```json
-{"destination":"community","body":"Meet at the school"}
+### Binary Packet Structure (14-Byte Fixed Header)
+
+Every over-the-air frame starts with an unencrypted 14-byte transport header, followed by an encrypted payload and a 16-byte authentication tag:
+
+```
++--------+--------+--------+--------+--------+--------+--------+--------+
+| Byte 0 | Byte 1 | Byte 2 | Byte 3 | Byte 4 | Byte 5 | Byte 6 | Byte 7 |
+| Magic  | Version| Net ID | Class  |           Message ID            |
+| (0x52) | (0x02) | (0x26) | (Type) |          (32-bit uint)          |
++--------+--------+--------+--------+--------+--------+--------+--------+
+| Byte 8 | Byte 9 | Byte 10| Byte 11| Byte 12| Byte 13| 14 .. 13+N     |
+| Source Node ID  |  Dest Node ID   |  Hop   | Payload| Ciphertext     |
+| (16-bit uint)   | (16-bit uint)   | Limit  | Length | Payload        |
++--------+--------+--------+--------+--------+--------+----------------+
+| (14+N) .. (29+N)                                                     |
+| 16-Byte Cryptographic Authentication Tag (AES-128-GCM Tag)           |
++----------------------------------------------------------------------+
 ```
 
-The current bridge responds with a `STATUS` frame carrying the sequence and:
+#### Field Specifications:
 
-```json
-{"id":"esp32-accepted","state":"acceptedByNode"}
-```
+| Offset | Size (Bytes) | Field Name | Type | Value / Purpose |
+| :---: | :---: | :--- | :--- | :--- |
+| `0` | 1 | `Magic` | `uint8` | Fixed constant `0x52` (`'R'`) |
+| `1` | 1 | `Version` | `uint8` | Fixed constant `0x02` (Protocol Version 2) |
+| `2` | 1 | `Network ID` | `uint8` | Fixed constant `0x26` (Network isolation identifier) |
+| `3` | 1 | `Packet Class` | `uint8` | `0x01` Direct Text, `0x02` Global Chat, `0x03` SOS Alert, `0x04` Node Beacon, `0x05` Passive ACK |
+| `4` | 4 | `Message ID` | `uint32` (BE) | Monotonic message identifier (used for 64-bit deduplication key) |
+| `8` | 2 | `Source Node ID` | `uint16` (BE) | Originating gateway node ID (`0x0001` to `0xfffe`) |
+| `10` | 2 | `Dest Node ID` | `uint16` (BE) | Destination node ID (`0xffff` for mesh broadcast) |
+| `12` | 1 | `Hop Limit` | `uint8` | Time-to-Live hop counter (starts at 3, decremented on relay) |
+| `13` | 1 | `Payload Length` | `uint8` | Ciphertext length $N$ (maximum 225 bytes) |
+| `14` | $N$ | `Ciphertext` | `bytes` | AES-128-GCM encrypted application payload |
+| `14+N` | 16 | `Auth Tag` | `bytes` | Cryptographic authentication tag (tamper detection) |
 
-This response confirms BLE acceptance by the ESP32 only. It is not proof of
-LoRa transmission, mesh forwarding, recipient receipt or emergency response.
+---
 
-`PARTICIPANT_HELLO` carries the app's stable participant ID and display name
-after BLE connection. The reference firmware retains up to eight participant
-identities and uses the ID as the deduplication key. A new ID is stored once;
-a repeated ID refreshes its connection association and heartbeat instead of
-creating another row. Display names are also unique, so a different ID using
-an existing name is rejected without changing the stored participant.
+## 3. Mesh Routing & Transmission Control
 
-For every HELLO, the node sends a sequence-matched `STATUS` response to the
-joining phone with `state: "participantAccepted"`, a boolean `stored` field,
-and the complete `participants` array. When a new ID is stored, it also emits
-one `PARTICIPANT_ROSTER` notification to all subscribed phones, including
-already-connected phones. Flutter applies the roster from either the
-acknowledgement or the unsolicited roster event, so the joining phone does
-not depend on notification timing.
-
-The current bridge uses a simple in-memory roster and is not yet persisted
-across ESP32 reboot. A normal BLE disconnect removes that connection's
-participant immediately and broadcasts the updated roster to the remaining
-clients. Clients refresh their participant hello every five seconds. The bridge
-also expires participants after two missed ten-second probes, covering silent
-radio loss or sudden power-off where the BLE disconnect callback may not run.
-The notify characteristic also exposes the current roster as a plain readable
-JSON value. After connecting, and whenever the user opens the roster, Flutter
-performs one direct GATT read of that value. This keeps roster retrieval
-independent from framed notification ordering and request timeouts.
-
-Every ten seconds, the node probes each participant in its table with a
-`PARTICIPANT_PRESENCE_PROBE`. A connected app answers with a sequence-matched
-`STATUS` payload containing `state: "participantPresenceAck"` and its
-`participantId`. The node clears that participant's missed-probe count when
-the response arrives. A participant that misses two consecutive probes is
-removed, and the changed roster is then broadcast to the remaining phones.
-
-The Flutter transport serializes all writes per BLE connection, waits 25 ms
-between chunks and retries Android `WRITE_REQUEST_BUSY` responses up to three
-times. This is required because ATT write requests must not overlap.
-
-## Serial trace
-
-The reference firmware logs the complete BLE bridge lifecycle at 115200 baud.
-Each line begins with `[LoRaResQ]` and an event name:
-
-| Event | Meaning |
-|---|---|
-| `BOOT` / `READY` | Firmware startup and advertising is ready |
-| `BLE_CONNECTED` / `BLE_DISCONNECTED` | BLE client count changed |
-| `IN_CHUNK` / `OUT_CHUNK` | BLE bytes received or notified |
-| `IN_FRAME` / `OUT_FRAME` | Complete protocol frame received or sent |
-| `FRAME_REJECTED` / `FRAME_IGNORED` | Invalid or unsupported input |
-| `SEND_TEXT` | Text command payload received |
-| `PARTICIPANT_HELLO` | App identity announcement received |
-| `PARTICIPANT_STORED` / `PARTICIPANT_REFRESHED` | Registration was added or refreshed without duplication |
-| `PARTICIPANT_REJECTED_DUPLICATE_NAME` | Registration was rejected because its display name is already used |
-| `ROSTER_UPDATED` / `ROSTER_CLEARED` | Participant roster changed |
-
-Do not treat serial output as proof of LoRa delivery; it proves only the local
-BLE bridge activity.
-
-## Firmware entry point
-
-The Arduino-compatible reference bridge is in
-`firmware/esp32_server/esp32_server.ino`. It accepts a framed
-`SEND_TEXT`, logs the JSON payload over serial, and returns an acceptance
-notification. LoRa radio forwarding is intentionally the next firmware step.
-
-## Radio packet simulator slice
-
-The in-memory radio forwarding rules are implemented in
-`lib/data/radio_mesh.dart` and cover network isolation, expiry, duplicate
-suppression and bounded hop forwarding. They are documented and tested in
-`docs/radio-mesh-simulator.md`. This is a software-only acceptance slice; it
-does not validate a LoRa module, antenna, frequency profile or range.
+1. **Stop-and-Wait with Passive Overhearing:**
+   - To conserve airtime on half-duplex LoRa channels, nodes utilize **Passive Acknowledgements (Passive ACKs)**. When Node 1 relays to Node 2 destined for Node 3, Node 1 listens for Node 2 forwarding the packet to Node 3. Overhearing Node 2's transmission serves as an implicit ACK, eliminating explicit ACK packet overhead.
+2. **Duplicate Suppression:**
+   - Every node maintains a 256-entry FIFO ring buffer of 64-bit keys:
+     $$\text{Key} = (\text{SourceNodeID} \ll 32) \mid \text{MessageID}$$
+   - Any packet whose key is already present in the cache is discarded immediately.
+3. **SNR-Weighted Jitter Backoff:**
+   - To prevent packet collisions during controlled flooding, relay nodes apply a randomized delay inversely proportional to signal quality before retransmitting:
+     $$T_{\text{delay}} = T_{\text{base}} + \text{Uniform}(0, T_{\text{jitter}}) \times \frac{1}{\text{SNR}_{\text{norm}}}$$
+4. **Store-and-Forward Retention:**
+   - Undelivered 1:1 messages are spooled to the serving node's MicroSD card storage for up to **7 days**.
+   - Global announcements and emergency broadcasts are retained for up to **30 days**.

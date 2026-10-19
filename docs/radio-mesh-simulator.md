@@ -1,37 +1,60 @@
-# Radio mesh simulator slice
+# LoRaResQ Multi-Node RF Mesh Simulator
 
-This slice validates the forwarding rules before a LoRa driver is connected to
-the ESP32 firmware. It is deliberately an in-memory protocol core, not a claim
-that radio transmission works yet.
+The **Multi-Node RF Mesh Simulator** models physical-layer Semtech SX1262 LoRa transmission, controlled flooding, CSMA/CA backoff, passive overhearing (Passive ACKs), and store-and-forward queueing in software before physical hardware integration.
 
-## Packet rules
+---
 
-Each packet contains a network ID, stable source ID, message ID, destination,
-packet type, hop limit, creation/expiry timestamps and a bounded payload.
-Packets are UTF-8 JSON for simulator readability; the hardware implementation
-must replace this with the versioned, authenticated radio encoding described in
-`BLUEPRINT.md` before field use.
+## 1. Architecture
 
-`RadioMeshEngine` applies the controlled-flooding rules:
+The simulator is implemented in TypeScript and consists of two layers:
+1. **Mesh Simulation Engine ([`src/lib/simulator/meshSimulator.ts`](file:///c:/Users/tanis/Documents/VSC%20Projects/The%20Usual%20Idiots/LoRaResQ/src/lib/simulator/meshSimulator.ts)):**
+   - Models individual mesh nodes (`SimulatedMeshNode`) with internal state, client lease registries, deduplication ring buffers, and store-and-forward queues.
+   - Calculates exact physical **Time-on-Air (ToA)** based on Semtech SX1262 formulas ($SF = 9, BW = 125\text{ kHz}, CR = 4/5$).
+   - Models path loss, RF link SNR/RSSI, packet drop rates, and network partitions between nodes.
+   - Implements **Stop-and-Wait with Passive Overhearing** to confirm multi-hop deliveries without explicit ACK packet overhead.
+2. **Standalone Gateway Server ([`simulator/server.ts`](file:///c:/Users/tanis/Documents/VSC%20Projects/The%20Usual%20Idiots/LoRaResQ/simulator/server.ts)):**
+   - Launches three independent WebSocket gateway servers representing distinct physical geographic nodes:
+     - **Node 1 (Alpha):** `ws://localhost:8081/ws` (Relief Camp Alpha)
+     - **Node 2 (Bravo):** `ws://localhost:8082/ws` (Waypoint Relay Bravo)
+     - **Node 3 (Charlie):** `ws://localhost:8083/ws` (Forest Hamlet Charlie)
+   - Enables simultaneous multi-browser or multi-tab testing, allowing developers to switch gateways in the web console and observe multi-hop routing in real time.
 
-- reject packets from another network;
-- reject expired packets;
-- remember each `(source ID, message ID)` once to suppress duplicates;
-- deliver packets addressed to the node or the `community` destination;
-- forward an eligible packet at most once with its hop limit decremented; and
-- stop forwarding when the hop limit reaches zero.
+---
 
-## Run the test (Archived in v1 branch)
+## 2. Running the Simulator
 
-```text
-# To execute this historical in-memory test harness, switch to branch v1:
-git checkout v1
-flutter test test/radio_mesh_test.dart
+### Step 1: Start the Gateway Server
+```bash
+npm run sim
 ```
 
-The test covers encode/decode, A->B->C forwarding, duplicate suppression,
-wrong-network rejection, expiry, hop exhaustion and packet-size limits.
+Output:
+```text
+[LoRaResQ Simulator] Initializing 3-node RF mesh...
+[LoRaResQ Simulator] Node 1 (Relief Camp Alpha) listening on ws://localhost:8081/ws
+[LoRaResQ Simulator] Node 2 (Waypoint Relay Bravo) listening on ws://localhost:8082/ws
+[LoRaResQ Simulator] Node 3 (Forest Hamlet Charlie) listening on ws://localhost:8083/ws
+[LoRaResQ Simulator] Multi-node RF simulator online.
+```
 
-The next hardware phase still requires selecting the exact LoRa module,
-frequency profile, wiring and a second radio node. This simulator must not be
-presented as evidence of radio range or delivery reliability.
+### Step 2: Start the Web Console
+In a second terminal:
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000). Use the **Gateway Switcher** dropdown in the top command header to connect to Port 8081, 8082, or 8083.
+
+---
+
+## 3. Running Automated Tests
+
+To run the Vitest test suite that verifies the simulation engine:
+```bash
+npm test
+```
+
+Tests verify:
+* 1:1 message delivery across multi-hop relays ($A \to B \to C$) and passive ACK triggering.
+* 256-entry duplicate suppression ring buffer.
+* Store-and-forward spooling on the serving node when a recipient is offline, with automatic flushing upon reconnection.
+* 14-byte binary packet serialization, CRC, and AES-128-GCM authentication tags.
